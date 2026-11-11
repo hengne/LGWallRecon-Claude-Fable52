@@ -39,8 +39,9 @@ if os.path.exists(p):
 p = os.path.join(OUT, 'resolution.json')
 if os.path.exists(p):
     r = json.load(open(p)); k = r['k']
-    vis = [r['corr'][k.index(v)] for v in (30, 60, 100, 150) if v in k]
-    n['resolution'] = dict(corr_vis_lo=min(vis), corr_vis_hi=max(vis), frac_vis=100 * r['frac_true'][k.index(150)], k=k, corr=r['corr'], frac_true=r['frac_true'], amin_um=r['amin_um'])
+    # 'visible' subspace = the 100 best-seen wall patterns; the best 30 give the upper end of the range
+    n['resolution'] = dict(corr_vis_lo=r['corr'][k.index(100)], corr_vis_hi=r['corr'][k.index(30)], frac_vis=100 * r['frac_true'][k.index(100)],
+                           k=k, corr=r['corr'], frac_true=r['frac_true'], amin_um=r['amin_um'])
 # structure left unexplained after subtracting the noise in quadrature [% of plateau]
 n['excess'] = float(np.sqrt(max(n['rms'] ** 2 - (100 * np.hypot(2.0e-4, mc) / plat) ** 2, 0.0)))
 json.dump(n, open(os.path.join(RES, 'numbers.json'), 'w'), indent=1)

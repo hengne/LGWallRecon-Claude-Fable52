@@ -20,10 +20,11 @@ everywhere; the measured map is not flat. LGWallRecon
 ## Result in one paragraph
 
 A wall is found for which simulation and measurement differ by about 1 % (RMS) in the inner aperture, against
-about 0.8 % point noise; an ideal cone leaves 5.4 %. The local unevenness needed is only tens of micrometres.
+about 0.8 % point noise; an ideal cone leaves 5.4 %. The local unevenness needed is small: 13 µm RMS in the
+published fit, on top of an axisymmetric narrowing of the bore.
 **That wall is not unique.** In a closure test with a known wall the synthetic map is reproduced down to the
-noise, but the recovered wall correlates with the true one at only about 0.1. The scan constrains roughly
-100–150 combinations of the wall shape; inside that visible subspace the recovery is good (correlation 0.7–0.9),
+noise, but the recovered wall correlates with the true one at only about 0.1. The scan is sensitive to roughly
+100 combinations of the wall shape; inside that visible subspace the recovery is good (correlation 0.7–0.97),
 outside it nothing is learned. Read the wall figure as *the least unevenness that explains the scan*, not as a
 survey of the real surface. Exact numbers are in `results/numbers.json`.
 
@@ -32,7 +33,7 @@ survey of the real surface. Exact numbers are in `results/numbers.json`.
 ## Quick start
 
 ```bash
-git clone <this repository> && cd LGWallRecon-Claude-Fable52
+git clone git@github.com:hengne/LGWallRecon-Claude-Fable52.git && cd LGWallRecon-Claude-Fable52
 python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 ./run_all.sh                  # aperture -> reconstruction -> figures + report  (~30 min with a GPU)
 ./run_all.sh --with-checks    # also closure test, reciprocity test and Geant4 cross-check
@@ -70,11 +71,11 @@ and troubleshooting.
 | Check | Result |
 |---|---|
 | Geant4, ideal cone | T = 0.209 ± 0.002, flat; theory (R₂/R₁)² = 0.2090 |
-| Geant4, fitted wall (720 000 facets) | Geant4 / tracer = 1.000 ± 0.001 |
+| Geant4, fitted wall (720 000 facets) | Geant4 / tracer = 1.002 ± 0.001 |
 | GPU against CPU tracer | identical ray by ray in double precision; single precision unbiased |
 | Reciprocity (flux in → out equals out → in) | ratio 1.00 ± 0.01 |
 | Closure test, map | reproduced down to the noise |
-| Closure test, wall | **not recovered** (correlation ≈ 0.1; 0.7–0.9 inside the scan-visible subspace) |
+| Closure test, wall | **not recovered** (correlation ≈ 0.1; 0.7–0.97 inside the scan-visible subspace) |
 
 ## Layout
 
@@ -95,6 +96,10 @@ radius; everything is attributed to geometry (perfect mirror, uniform PMT, Lambe
 the entrance rim is not fitted; resolution is 2.5 mm along the axis and 15° in azimuth. To pin down the real
 wall, add independent measurements: collimated-beam scans at several angles, angle-resolved readout, a scan
 from the exit side, or profilometry.
+
+## Repositories
+
+GitHub (public): <https://github.com/hengne/LGWallRecon-Claude-Fable52> · GitLab (SCNU group): <https://gitlab.cern.ch/SCNU/LGWallRecon-Claude-Fable52>
 
 ## Citing
 

@@ -1,1 +1,15 @@
 mesh (1440, 251) r range 3.661215836582889 8.533027348399875 ; points 120
+[run_limited] 6 of 32 cores busy -> using 22 cores, MemoryMax 6G
+{
+ "npoints": 120,
+ "photons_per_point": 4000,
+ "mean_T_geant4": 0.19122796666666667,
+ "mean_T_tracer": 0.19087157604166669,
+ "ratio": 1.0018671749476318,
+ "ratio_err": 0.0011004011665299606,
+ "pull_mean": 0.15712712513390834,
+ "pull_rms": 1.0836469877630288,
+ "corr": 0.9700323959051668,
+ "T_min": 0.16296506875000003,
+ "T_max": 0.20338058125000003
+}

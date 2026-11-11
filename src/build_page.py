@@ -39,7 +39,7 @@ def inline_svg(name):
 
 # ---- composed blocks
 cl, rs, g4, rc = N.get('closure'), N.get('resolution'), N.get('g4'), N.get('recip')
-corr_vis = f'{rs["corr_vis_lo"]:.1f}–{rs["corr_vis_hi"]:.1f}' if rs else '–'
+corr_vis = f'{rs["corr_vis_lo"]:.2f}–{rs["corr_vis_hi"]:.2f}' if rs else '–'
 facts = [(f'{N["rms"]:.1f} %', L['fact1'].format(npts=N['npts'])), (f'{N["rms_id"]:.1f} %', L['fact2']),
          (f'{N["loc_rms"]:.0f} µm', L['fact3'].format(loc_min=N['loc_min'], loc_max=N['loc_max']))]
 if cl and rs: facts.append((corr_vis, L['fact4'].format(corr_all=cl['corr_all'])))
@@ -81,4 +81,6 @@ if left: print('WARNING unfilled placeholders:', sorted(set(left)))
 full = (f'<!doctype html>\n<html lang="{L["lang"]}">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>\n</head>\n<body>\n' + page + '\n</body>\n</html>\n')
 open(OUTF, 'w', encoding='utf-8').write(full)
+if os.environ.get('LG_BODY_DIR'):          # body-only copy (no <html>/<head> wrapper) for hosts that add their own page skeleton
+    open(os.path.join(os.environ['LG_BODY_DIR'], os.path.basename(OUTF)), 'w', encoding='utf-8').write(page)
 print(OUTF, os.path.getsize(OUTF) // 1024, 'kB')

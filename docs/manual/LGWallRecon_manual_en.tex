@@ -105,10 +105,10 @@ from the CAD cone with a local unevenness of \LocRms\um{} rms, largest bump \Loc
 seven bumps and dents was turned into a synthetic scan with the measured noise and sent through the
 same pipeline. The synthetic map was reproduced down to the noise (residual \ClMapRms\,\%), yet the
 recovered wall correlates with the true wall at only \ClCorrAll: true local unevenness \ClRmsTrue\um,
-recovered \ClRmsRec\um. A linear analysis explains why. The scan is sensitive to roughly 100--150
+recovered \ClRmsRec\um. A linear analysis explains why. The scan is sensitive to roughly 100
 combinations of the wall shape. Inside that visible subspace the recovered and the true wall correlate
 at \ResCorrLo--\ResCorrHi; but the test wall had only about \ResFracVis\,\% of its deformation power
-there. The rest leaves almost no trace in the scan.
+there. The rest is imprinted on the scan too weakly to be recovered.
 
 \textbf{How to read the wall figure.} It is the smoothest wall, with the least unevenness, among those
 that reproduce the scan. It tells how much unevenness is needed at the least, and where the
@@ -902,8 +902,9 @@ and raises the model noise by 30--40\,\%.
 \label{sec:limits}
 
 \textbf{The solution is not unique.} Different walls give the same response map. The scan constrains
-about 100--150 combinations of the wall shape, down to 1--10\um; a broad, gentle bump leaves almost
-no trace even at 0.2--0.3\,mm height. The damped iterations stay near the start wall, so the result is
+about 100 combinations of the wall shape, down to 1--10\um; the trace left by broad, gentle bumps
+0.2--0.3\,mm high can equally be produced by a different wall with only about ten micrometres of
+unevenness. The damped iterations stay near the start wall, so the result is
 the wall with the least unevenness among those that fit. The local unevenness of \LocRms\um{} rms is
 a lower bound on what the real wall must have, not an estimate of what it has.
 

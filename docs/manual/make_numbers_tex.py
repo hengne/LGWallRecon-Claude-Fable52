@@ -75,8 +75,8 @@ macros = [
     ('ClMapRms', num(get('closure', 'map_rms'), '.2f')),
     ('ClProfErr', num(get('closure', 'prof_err'), '.0f')),
     # --- resolution study
-    ('ResCorrLo', num(get('resolution', 'corr_vis_lo'), '.1f')),
-    ('ResCorrHi', num(get('resolution', 'corr_vis_hi'), '.1f')),
+    ('ResCorrLo', num(get('resolution', 'corr_vis_lo'), '.2f')),
+    ('ResCorrHi', num(get('resolution', 'corr_vis_hi'), '.2f')),
     ('ResFracVis', num(get('resolution', 'frac_vis'), '.0f')),
 ]
 res = get('resolution')
