@@ -1,0 +1,1025 @@
+% LGWallRecon -- light-guide inner-wall reconstruction from an entrance-face scan
+% Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
+%
+% User manual, English edition.  Build with build_manual.sh (xelatex).
+% Every result number comes from numbers.tex (generated from results/numbers.json).
+\documentclass[11pt,a4paper]{article}
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{fontspec}
+\usepackage{xeCJK}                         % only for the author's Chinese name
+\setCJKmainfont{FandolSong-Regular.otf}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs,tabularx,array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{float}                         % [H]: keep tables and the pipeline diagram where they are written
+\usepackage[hidelinks]{hyperref}
+
+% text shown when a repository URL has not been filled in yet
+\newcommand{\UrlPending}{to be added}
+\input{numbers.tex}
+
+\hypersetup{
+  pdftitle={LGWallRecon user manual},
+  pdfauthor={Hengne Li (李衡讷), South China Normal University},
+  pdfsubject={Light-guide inner-wall reconstruction from an entrance-face scan},
+  pdfkeywords={light guide, ray tracing, inverse problem, OpenCL, Geant4}
+}
+\definecolor{rule}{gray}{0.62}
+\definecolor{codebg}{gray}{0.965}
+\lstset{basicstyle=\ttfamily\small, columns=fullflexible, keepspaces=true, breaklines=true,
+  breakatwhitespace=false, frame=single, framerule=0.3pt, rulecolor=\color{rule},
+  backgroundcolor=\color{codebg}, xleftmargin=3pt, xrightmargin=3pt, aboveskip=7pt, belowskip=7pt,
+  showstringspaces=false, upquote=true}
+\setlist{itemsep=2pt, topsep=4pt}
+\setlength{\parskip}{4pt plus 1pt}
+\setlength{\parindent}{0pt}
+\captionsetup{font=small, labelfont=bf}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\um}{\,\textmu m}
+\newcommand{\code}[1]{\texttt{#1}}
+\emergencystretch=2em
+% one troubleshooting entry: symptom in bold, remedy below
+\newcommand{\trouble}[2]{\par\medskip\textbf{#1}\par\nopagebreak #2\par}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title page
+\begin{titlepage}
+\vspace*{2.5cm}
+{\Huge\bfseries LGWallRecon\par}
+\vspace{0.5cm}
+{\LARGE Light-guide inner-wall reconstruction\\[2pt] from an entrance-face scan\par}
+\vspace{0.9cm}
+{\Large User manual\par}
+\vspace{2.2cm}
+{\large Hengne Li (李衡讷)\par}
+\vspace{4pt}
+South China Normal University\par
+\vspace{4pt}
+\code{Hengne.Li@cern.ch} \quad \code{Hengne.Li@m.scnu.edu.cn}\par
+\vspace{1.2cm}
+11 November 2026\par
+\vfill
+\fbox{\parbox{0.92\textwidth}{\small
+\textbf{In one paragraph.} LGWallRecon simulates a hollow conical light guide with a mirror wall by
+ray tracing, and searches for a wall shape for which the simulated response map matches a measured
+scan of the entrance face. For the scan shipped with the package the simulation and the measurement
+differ by \RmsFit\,\% in the inner aperture, against about 0.8\,\% point noise. The wall that achieves
+this is \emph{not unique}: the scan fixes only a small part of the wall shape. Read the wall figure as
+the minimum unevenness needed to explain the scan, not as a survey of the real surface.}}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ====================================================================== 1
+\section{What the toolkit does}
+
+The light guide is a hollow cone, 17.5\,mm in diameter at the entrance and 8\,mm at the exit,
+100\,mm long, lined with reflective film. In the measurement a small diffuse light source is moved
+over the entrance face on a $100\times100$ grid with 0.2\,mm step, and a PMT at the exit records the
+signal at each position. The result is a two-dimensional response map. It is not flat: it shows an
+off-centre dark spot, a bright ring and several bright patches, a few percent in size.
+
+LGWallRecon answers two questions.
+
+\begin{enumerate}
+\item \textbf{Can a ray-tracing simulation reproduce this map?} Yes. An ideal cone responds
+identically at every source position, so all the structure must come from the wall departing from
+the ideal shape. With a suitably deformed wall the simulated map agrees with the measured one to
+\RmsFit\,\% (rms, inner aperture $r<8$\,mm, \Npts{} scan points); the ideal cone misses by
+\RmsIdeal\,\%. The point noise of the measurement is about 0.8\,\%.
+\item \textbf{Which wall does it?} The toolkit returns one: a deviation field $\delta(\varphi,z)$
+from the CAD cone with a local unevenness of \LocRms\um{} rms, largest bump \LocMin\um, largest dent
+\LocMax\um, on top of an azimuthal mean deviation between \MeanMax{} and \MeanMin\,mm (the bore is narrower than CAD).
+\end{enumerate}
+
+\textbf{The honest headline.} That wall is not the only one. In a closure test a known wall with
+seven bumps and dents was turned into a synthetic scan with the measured noise and sent through the
+same pipeline. The synthetic map was reproduced down to the noise (residual \ClMapRms\,\%), yet the
+recovered wall correlates with the true wall at only \ClCorrAll: true local unevenness \ClRmsTrue\um,
+recovered \ClRmsRec\um. A linear analysis explains why. The scan is sensitive to roughly 100--150
+combinations of the wall shape. Inside that visible subspace the recovered and the true wall correlate
+at \ResCorrLo--\ResCorrHi; but the test wall had only about \ResFracVis\,\% of its deformation power
+there. The rest leaves almost no trace in the scan.
+
+\textbf{How to read the wall figure.} It is the smoothest wall, with the least unevenness, among those
+that reproduce the scan. It tells how much unevenness is needed at the least, and where the
+scan-visible part of it sits. It is not a survey of the real inner surface. Section~\ref{sec:limits}
+lists what extra measurements would be needed for that.
+
+What the package contains:
+\begin{itemize}
+\item a specular ray tracer for a cone with a free-form wall, on the CPU (\code{numba}) and on the GPU
+(OpenCL), tracing the same rays;
+\item the inversion pipeline: aperture measurement, axisymmetric profile, linear-response kernels,
+damped least-squares inversion with exact residuals;
+\item validation tools: Geant4 cross-check, reciprocity test, GPU-against-CPU test, Jacobian test,
+closure test, resolution study;
+\item figure, table and report generators in Chinese and English, including a single-file web page
+with a live 3-D demonstration of rays in the guide.
+\end{itemize}
+
+Figure~\ref{fig:wall} shows the wall returned for the shipped scan and Figure~\ref{fig:maps} the
+comparison of the simulated with the measured map.
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.88\textwidth]{fig/en/inner_surface.png}
+\caption{The wall figure (\texttt{inner\_surface.svg}). A: local unevenness, the deviation minus its
+azimuthal mean. B: the azimuthal mean. C: the total deviation from the CAD cone. Red is a bump into
+the cavity, blue a dent.}\label{fig:wall}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.88\textwidth]{fig/en/response_maps.png}
+\caption{Measured map, simulated map and residual (\texttt{response\_maps.svg}), with the azimuthally
+averaged radial profile and the signal around the ring of radius 4\,mm.}\label{fig:maps}
+\end{figure}
+
+\clearpage
+
+% ====================================================================== 2
+\section{Physics and model}
+
+\subsection{Geometry and coordinates}
+
+All lengths are in millimetres. The $z$ axis is the optical axis, $z=0$ at the entrance plane and
+$z=L=100$ at the exit plane where the PMT sits. The nominal (CAD) wall radius is
+\[
+  r_\mathrm{CAD}(z) = R_1 + (R_2-R_1)\,\frac{z}{L}, \qquad R_1 = 8.75,\quad R_2 = 4.00,
+\]
+a cone of half angle $2.72^\circ$. The real wall is written as
+\[
+  r(\varphi,z) = r_\mathrm{CAD}(z) + \delta(\varphi,z).
+\]
+$\delta<0$ means the wall bulges into the cavity (a bump); $\delta>0$ means it recedes (a dent).
+
+The transverse axes $x,y$ are the scan-stage axes, with the origin moved to the measured centre of the
+entrance aperture. The azimuth $\varphi$ is counted counter-clockwise from $+x$, looking at the
+entrance from the light-source side. Relating $\varphi$ to the hardware requires knowing how the stage
+axes are oriented with respect to the light guide, and which of the four cells of the block was
+scanned; the toolkit cannot know either.
+
+The CAD file \path{data/4cells_17.5mm_8mm_circle_to_circle_100mm-Cut.step} describes a block with four
+identical cells. Each cell is the cone above followed by a cylindrical pocket of 16.36\,mm diameter
+and 10\,mm depth that holds the PMT. Only the cone enters the simulation.
+
+\subsection{Source, wall and detector}
+
+\begin{description}[leftmargin=1.6em]
+\item[Source] A small spot in the entrance plane that emits like a Lambertian surface into the
+forward hemisphere. The spot is a uniform disc; its radius (\SpotR\,mm for the shipped scan) is
+measured from the sharp edge of the scan. Rays that start outside the aperture are blocked.
+\item[Wall] A perfect mirror: specular reflection with reflectivity 1. A reflectivity below 1 can be
+set (parameter \code{refl}) and was tried as a free parameter; it came out at 0.94 without removing the
+need for geometric deformation and without a clearly better fit, so results are quoted for a perfect
+mirror.
+\item[Detector] Every ray that crosses the exit plane $z=L$ inside the wall is counted, whatever its
+angle and position. A ray that returns through the entrance plane is lost.
+\end{description}
+
+The simulated signal at source position $(x,y)$ is $A\,T(x,y)$, where $T$ is the fraction of all
+emitted light that reaches the exit and $A$ is one overall amplitude (volts per unit transmission)
+fitted to the data. The absolute scale of the measurement is therefore not used.
+
+\subsection{The ideal cone}
+
+For a diffuse point source the ideal cone has a remarkably simple response: the transmission is the
+same at every source position,
+\[
+  T_\mathrm{ideal} = \left(\frac{R_2}{R_1}\right)^2 = 0.209 .
+\]
+This is conservation of \'etendue: a lossless concentrator cannot pass more than the area ratio of a
+Lambertian input, and a long shallow cone reaches that limit everywhere. The tracer reproduces
+0.2090 to three digits and Geant4 gives $0.209\pm0.002$. The consequence for the inversion is
+important: any non-uniformity of the measured map must come from the wall being non-ideal (or from
+effects outside the model, see Section~\ref{sec:limits}).
+
+\subsection{The wall as a B-spline surface}
+
+$\delta(\varphi,z)$ is a tensor-product uniform cubic B-spline,
+\[
+  \delta(\varphi,z) = \sum_{i=0}^{N_\varphi-1}\;\sum_{j=0}^{N_z+2} c_{ij}\,B_i^{(\varphi)}(\varphi)\,B_j^{(z)}(z).
+\]
+In $\varphi$ the spline is periodic with $N_\varphi=24$ knots at $\varphi_i = 2\pi i/N_\varphi$
+($15^\circ$ apart). In $z$ there are $N_z$ cells on $[0,L]$ and $N_z+3$ coefficients; coefficient $j$
+is centred at $z_j=(j-1)\,L/N_z$, so the first and the last one sit one cell outside the guide. The
+final fit uses $N_z=40$ (2.5\,mm cells, 43 coefficients per azimuth), which gives $24\times43=1032$
+wall parameters. The spline is $C^2$, so the surface normal is continuous, which specular reflection
+needs.
+
+\subsection{Ray--wall intersection}
+
+A ray $\mathbf p+t\,\mathbf d$ hits the wall where
+$f(t)=\sqrt{x^2+y^2}-r_\mathrm{CAD}(z)-\delta(\varphi,z)$ changes sign from negative to positive. The
+tracer finds the first such $t$ in three steps.
+\begin{enumerate}
+\item \emph{Bounding cones.} $\delta$ lies between two numbers $\delta_\mathrm{lo}$ and
+$\delta_\mathrm{hi}$ (sampled on a fine grid, with a small margin). The wall therefore lies between
+the cones $r_\mathrm{CAD}+\delta_\mathrm{lo}$ and $r_\mathrm{CAD}+\delta_\mathrm{hi}$, whose
+intersections with the ray are roots of a quadratic. They bracket the hit.
+\item \emph{Marching.} The bracket is walked in steps of at most 3\,mm until $f$ changes sign.
+\item \emph{Illinois regula falsi} on that last step, to $10^{-10}$\,mm in double precision
+($2\times10^{-6}$\,mm in single precision).
+\end{enumerate}
+The outward normal is the gradient of $F=r-r_\mathrm{CAD}(z)-\delta(\varphi,z)$,
+\[
+  \mathbf n \;\propto\; \hat{\mathbf r} \;-\; \frac{1}{r}\frac{\partial\delta}{\partial\varphi}\,\hat{\boldsymbol\varphi}
+  \;-\;\Big(\frac{R_2-R_1}{L}+\frac{\partial\delta}{\partial z}\Big)\hat{\mathbf z},
+\]
+with the derivatives taken analytically from the spline, and the ray is reflected as
+$\mathbf d' = \mathbf d-2(\mathbf d\cdot\mathbf n)\,\mathbf n$. A ray ends when it crosses $z=L$
+(detected) or $z=0$ (lost).
+
+\subsection{Quasi-random rays and common random numbers}
+
+For a Lambertian source the direction cosines $(d_x,d_y)$ are uniform in the unit disc. Only
+directions with $\sin\theta\le s_\mathrm{max}$ are sampled, because steeper rays never reach the exit
+(for the fitted wall nothing is lost with $s_\mathrm{max}=0.5$; the pipeline uses 0.55), and the
+result is scaled by $s_\mathrm{max}^2$.
+
+Rays are quasi-random rather than random. The four numbers that define a ray (two for the direction,
+two for the position inside the spot) come from the $R_4$ additive recurrence
+$u_j(k)=\operatorname{frac}(s_j+k\,g^{-j})$ with $g=1.2207\ldots$, evaluated in 32-bit integer
+arithmetic so that the CPU and the GPU produce the same rays. Each source position has its own
+shifts $s_j$ (a Cranley--Patterson rotation derived from a hash of the point index and a seed). Two
+properties follow.
+\begin{itemize}
+\item The noise of $T$ falls faster than $1/\sqrt{N}$: with 20\,000 rays per point it is about
+0.2--0.4\,\% of $T$, where independent random rays would give about 1.5\,\%.
+\item For a fixed seed the map is a deterministic function of the wall. Differences between two
+walls are then computed with \emph{common random numbers}: most rays have the same fate in both, and
+the noise of the difference is far below the noise of either map. All finite differences and all
+fit iterations rely on this.
+\end{itemize}
+
+\subsection{How a patch of wall shows up in the scan}
+
+A small deformation at height $z$ and azimuth $\varphi$ does not change the response near the point
+on the entrance face ``below'' it. It changes the fate of the marginal rays, those that just make it
+to the exit or just fail to, and for a given wall patch these rays come from a thin arc of source
+positions. The arc is typically 0.5\,mm wide, and its position and radius change quickly with $z$:
+patches near the entrance affect sources at the adjacent rim, patches around mid-length draw arcs
+and rings a few millimetres from the centre, patches near the exit give diffuse rings. The picture
+resembles tomography, with each scan pixel summing wall deformations along a curve.
+
+Two practical consequences: the response is very sensitive (a deformation of order 0.03\,mm changes
+the map by a few percent), and it needs a fine axial resolution of the wall model (2.5\,mm cells)
+to place the arcs correctly.
+
+\subsection{The inversion}
+
+The fit minimises
+\[
+  \chi^2(c,A) = \sum_n \frac{\big(d_n-A\,T_n(c)\big)^2}{\sigma^2}
+  + \lambda^2\,\lVert P c\rVert^2 + (0.05\,\lambda)^2\,\lVert c-c_\mathrm{base}\rVert^2
+  + \sum_i \frac{\big(\delta(\varphi_i,0)-\delta_\mathrm{ap}(\varphi_i)\big)^2}{(0.005\ \mathrm{mm})^2}.
+\]
+$d_n$ are the pedestal-subtracted scan values inside the fit radius (8\,mm by default), $\sigma$
+combines the point noise ($2.0\times10^{-4}$\,V) with the Monte Carlo noise of the model, $P$ takes
+first differences of the coefficients along $\varphi$ and $z$ (a smoothness penalty), $c_\mathrm{base}$
+is the axisymmetric base wall, and the last term ties the wall radius at $z=0$ to the aperture
+radius measured from the edge of the scan.
+
+$T_n(c)$ is not differentiable in closed form, and a brute-force finite-difference Jacobian is too
+noisy for single spline coefficients. The package uses two devices.
+
+\emph{Fourier-mode kernels.} Around an axisymmetric base wall the response to an azimuthal mode
+$\delta c_{ij}=a\cos(m\varphi_i)$ at one $z$ knot is a sum of a few harmonics
+$\sum_q A_{jmq}(\rho)\cos(q\psi)$ of the source azimuth $\psi$, with $q\in\{m,\,N_\varphi-m,\,N_\varphi+m\}$.
+One run perturbs the whole circumference, so the signal is strong while the wall slopes stay small, and
+projecting on $\cos(q\psi)$ averages the noise over all source angles. Central differences remove the
+second-order term. The Jacobian for any single coefficient follows by Fourier synthesis and rotation.
+Against exact finite changes of the map these kernels reach a correlation of 0.91--0.98 and a slope of
+0.93--1.0.
+
+\emph{Damped iterations with exact residuals.} Each Levenberg--Marquardt step solves the linearised
+problem with a damping term $\mu\lVert\Delta c\rVert^2$, then evaluates the true $\chi^2$ with a full
+ray trace. The step is kept if $\chi^2$ falls (and $\mu$ is halved); otherwise $\mu$ is multiplied by
+four and the step is recomputed, up to eight times. A Broyden rank-one update corrects the Jacobian
+with what each trial step actually did to the map. Because the residual is always exact, kernel
+errors slow the convergence but do not bias the answer.
+
+The axisymmetric part of the wall is large (tenths of a millimetre) and non-linear, so the chain
+first fits an axisymmetric profile alone (Stage A), then runs two rounds of kernels and inversion,
+the second with kernels recomputed around the updated azimuthal mean.
+
+% ====================================================================== 3
+\section{Installation}
+
+\subsection{Requirements}
+
+\begin{tabularx}{\textwidth}{@{}L{3.6cm}Y@{}}
+\toprule
+Component & Needed for \\
+\midrule
+Python $\ge 3.10$ with \code{numpy}, \code{scipy}, \code{matplotlib}, \code{numba},
+\code{contourpy}, \code{pillow} & everything \\
+\code{pyopencl} and an OpenCL GPU & fast tracing (optional; without it use \code{LG\_GPU=0}) \\
+Geant4 11.x, CMake, a C++17 compiler & the independent cross-check in \code{g4/} (optional) \\
+Node.js & the animated ray figure \code{ray\_animation.svg} (optional) \\
+TeX Live with \code{xelatex} and \code{ctex} & rebuilding this manual (optional) \\
+Firefox & rendering the manual figures from SVG (optional) \\
+Linux with \code{systemd} user sessions & the resource wrapper \code{tools/run\_limited.sh} \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Python environment}
+
+\begin{lstlisting}
+git clone <repository url> LGWallRecon
+cd LGWallRecon
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+\end{lstlisting}
+
+The scripts expect the interpreter at \path{.venv/bin/python} relative to the package root. The
+shell drivers accept another interpreter through the variable \code{PY}.
+
+\subsection{GPU (optional but recommended)}
+
+The tracer runs on any OpenCL device that \code{pyopencl} can see. Check with
+\begin{lstlisting}
+clinfo -l
+.venv/bin/python -c "import pyopencl as cl; print([d.name for p in cl.get_platforms() for d in p.get_devices()])"
+\end{lstlisting}
+The development machine has an AMD Radeon 8060S (Ryzen AI Max+ 395) driven through ROCm 7.2; the
+device appears as \code{gfx1151} on the platform ``AMD Accelerated Parallel Processing''. On AMD
+hardware \code{nvidia-smi} is absent and says nothing about GPU availability; use \code{clinfo} or
+\code{rocminfo}.
+
+Measured speeds for the fitted wall:
+
+\begin{tabularx}{\textwidth}{@{}L{6.2cm}Y@{}}
+\toprule
+Configuration & Rays per second \\
+\midrule
+GPU, single precision (default) & about $5\times10^{7}$ \\
+GPU, double precision & about 12 times slower than single \\
+CPU, 23 cores, double precision (\code{numba}) & about $2.5\times10^{6}$ \\
+\bottomrule
+\end{tabularx}
+
+The GPU version is therefore about twenty times faster than the CPU version on this machine. The
+kernel is single precision; it was checked ray by ray against the CPU in double precision
+(Section~\ref{sec:validation}). Without a GPU everything still runs with \code{LG\_GPU=0}; expect the
+full chain to take several hours instead of half an hour.
+
+Integrated GPUs share the system memory, and a cgroup memory limit does not cap GPU allocations. The
+tracer keeps its buffers at a few megabytes and submits work in slices of about half a second, so it
+neither exhausts memory nor trips the driver watchdog.
+
+\subsection{Geant4 (optional)}
+
+\begin{lstlisting}
+source <geant4 prefix>/bin/geant4.sh
+cd g4 && mkdir -p build && cd build
+cmake .. -DCMAKE_PREFIX_PATH=<geant4 prefix>
+make -j4
+\end{lstlisting}
+This builds \path{g4/build/lgsim}. No Geant4 data sets beyond the standard installation are needed;
+the program uses a minimal physics list with optical photons, transportation and the optical boundary
+process only.
+
+% ====================================================================== 4
+\section{Quick start}
+
+\begin{lstlisting}
+cd LGWallRecon
+./run_all.sh
+\end{lstlisting}
+
+\code{run\_all.sh} measures the aperture, runs the reconstruction chain on \path{data/scan_summary.csv},
+exports the wall, draws the figures in both languages and assembles the report pages. Every heavy
+step goes through \path{tools/run_limited.sh} (Section~\ref{sec:resources}).
+
+Expected run time with the GPU: about 8--12 minutes for each of the two kernel computations, one to
+two minutes for each inversion, half a minute for the final map; 25--30 minutes for the whole chain.
+
+Where the results appear:
+
+\begin{tabularx}{\textwidth}{@{}L{5.6cm}Y@{}}
+\toprule
+Path & Content \\
+\midrule
+\path{results/en/inner_surface.svg}, \path{results/zh/...} & the wall figure (vector, zoomable) \\
+\path{results/<lang>/response_maps.svg} & measured map, simulated map, residual, profiles \\
+\path{results/<lang>/closure.svg} & closure test (after \code{closure.sh}) \\
+\path{results/<lang>/ray_animation.svg} & animated side view of traced rays \\
+\path{results/wall_delta.csv} & $\delta(\varphi,z)$ on a $1^\circ\times0.5$\,mm grid \\
+\path{results/wall_coeffs.json} & the B-spline coefficients \\
+\path{results/numbers.json} & every number quoted in the report and in this manual \\
+\path{docs/LGWallRecon_report_en.html}, \path{..._zh.html} & single-file report pages with the 3-D demonstration \\
+\path{out/} & intermediate \code{.npz} and \code{.log} files (not versioned) \\
+\bottomrule
+\end{tabularx}
+
+To run the stages by hand, change into \path{src/} first; the scripts use paths relative to it.
+\begin{lstlisting}
+cd src
+R=../tools/run_limited.sh; PY=../.venv/bin/python
+$R $PY edge.py && $R $PY edge_spot.py      # aperture and light spot -> ../out/edge.npz
+$R ./pipeline.sh data                      # the reconstruction chain
+$R ./make_report.sh ../out/final_data.npz  # exports, figures, report pages
+\end{lstlisting}
+
+% ====================================================================== 5
+\section{The pipeline, step by step}
+\label{sec:pipeline}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=5mm and 7mm, >=Stealth,
+  box/.style={draw=black!55, rounded corners=2pt, align=center, font=\small, inner sep=4pt, minimum height=9mm, text width=27mm},
+  io/.style={box, fill=black!6}]
+\node[io] (scan) {scan CSV\\ \footnotesize\ttfamily data/};
+\node[box, right=of scan] (edge) {aperture, spot\\ \footnotesize\ttfamily edge.py, edge\_spot.py};
+\node[box, right=of edge] (A) {axisymmetric profile\\ \footnotesize\ttfamily stageA.py};
+\node[box, right=of A] (ref) {re-grid to $N_z=40$\\ \footnotesize\ttfamily refine.py};
+\node[box, below=9mm of ref] (k1) {kernels, round a\\ \footnotesize\ttfamily kernel\_modes.py};
+\node[box, left=of k1] (b1) {inversion, round a\\ \footnotesize\ttfamily stageB.py};
+\node[box, left=of b1] (k2) {kernels, round b\\ \footnotesize\ttfamily kernel\_modes.py};
+\node[box, left=of k2] (b2) {inversion, round b\\ \footnotesize\ttfamily stageB.py};
+\node[box, below=9mm of b2] (fin) {high-statistics map\\ \footnotesize\ttfamily final.py};
+\node[io, right=of fin] (out) {wall, figures, report\\ \footnotesize\ttfamily make\_report.sh};
+\draw[->] (scan) -- (edge); \draw[->] (edge) -- (A); \draw[->] (A) -- (ref); \draw[->] (ref) -- (k1);
+\draw[->] (k1) -- (b1); \draw[->] (b1) -- (k2); \draw[->] (k2) -- (b2); \draw[->] (b2) -- (fin); \draw[->] (fin) -- (out);
+\end{tikzpicture}
+\caption{The reconstruction chain. \texttt{pipeline.sh} runs the boxes from \texttt{stageA.py} to
+\texttt{final.py}.}
+\end{figure}
+
+All commands below are run from inside \path{src/}, through \path{../tools/run_limited.sh}.
+Environment variables used by the scripts are collected in Table~\ref{tab:env}.
+
+\subsection{\texttt{edge.py}: the entrance aperture}
+
+\begin{lstlisting}
+python edge.py
+\end{lstlisting}
+The edge of the scan is sharp, so the aperture can be measured directly, without ray tracing. The
+script takes the pedestal as the median signal far outside the aperture ($r>10$\,mm), then fits the
+radial edge profile in 48 azimuthal sectors with a plateau level, a slope and an error-function edge.
+The centre is moved until the $m=1$ Fourier component of the edge radius vanishes. Output:
+\path{../out/edge.npz} with the centre, the pedestal and the Fourier coefficients ($m=0\ldots8$) of
+the edge radius $r_\mathrm{ap}(\varphi)$, and a diagnostic plot \path{../out/edge.png}.
+
+For the shipped scan the mean radius is \RAp\,mm, that is \RApDiff\,mm below the CAD value of
+8.75\,mm, with $m=2$ and $m=4$ components of about 0.03\,mm.
+
+The first guess of the centre and the radial window of the edge fit are constants near the top of
+the script; change them for a different aperture (Section~\ref{sec:adapt}).
+
+\subsection{\texttt{edge\_spot.py}: the light spot}
+
+\begin{lstlisting}
+python edge_spot.py
+\end{lstlisting}
+A global fit of all edge points compares a Gaussian spot with a uniform disc. The disc describes the
+edge better (the signal has no tail outside the aperture). The script adds the disc radius
+(\SpotR\,mm) and a small correction of the mean aperture radius to \path{../out/edge.npz}. All later
+stages read the spot from that file.
+
+\subsection{\texttt{stageA.py}: the axisymmetric profile}
+
+\begin{lstlisting}
+LG_TAG=data python stageA.py 10 fix 3.0
+\end{lstlisting}
+Arguments: number of $z$ cells $N_z$ (10), \code{fix} or \code{refl} (fit the mirror reflectivity as
+well), weight of the curvature penalty (3.0). The script fits an axisymmetric wall offset
+$\delta_0(z)$ and the amplitude to the azimuthally averaged radial profile of the scan
+($\rho=0.1\ldots7.9$\,mm), by Levenberg--Marquardt with finite differences and common random numbers
+(120\,000 rays per radius). The radius at $z=0$ is tied to the measured aperture. Output:
+\path{../out/A_<tag>.npz} and a plot.
+
+How to judge it: the printed ``data'' $\chi^2$ should fall by more than an order of magnitude from the
+start value, and the residual plot should stay within about $\pm1\,\%$ of the plateau. The profile
+itself is \emph{not} well determined: different runs return visibly different $\delta_0(z)$ with
+the same fit quality (Section~\ref{sec:limits}).
+
+\subsection{\texttt{refine.py}: re-gridding along $z$}
+
+\begin{lstlisting}
+python refine.py ../out/A_data.npz 40 ../out/start_data.npz
+\end{lstlisting}
+Re-expresses a wall on a different number of $z$ cells. The input is either a Stage-A result (the
+profile is copied to all 24 azimuthal knots) or a fitted wall. For nested grids ($10\to40$) the
+conversion is exact.
+
+\subsection{\texttt{kernel\_modes.py}: the linear response}
+
+\begin{lstlisting}
+python kernel_modes.py ../out/start_data.npz 24 dataa 12000 0.06
+\end{lstlisting}
+Arguments: a wall file (its azimuthal mean becomes the base wall), $N_\varphi$, a tag, rays per source
+point (12\,000), mode amplitude in mm (0.06; modes above $m=3$ use $0.06\cdot3/m$). Sources sit on a
+polar grid of 57 radii (0.075 to 8.475\,mm) and 49 angles on the half circle. For each of the 43 $z$
+knots and each mode $m=0\ldots12$ the script traces the wall with $+a$ and $-a$ and stores the
+harmonic amplitudes $A_{jmq}(\rho)$. Output: \path{../out/kmodes_<tag>.npz}. Run time: about 10
+minutes on the GPU; one progress line per $z$ knot.
+
+The module also provides \code{jacobian(kn, rho, psi)}, which assembles the Jacobian for arbitrary
+source positions from the stored amplitudes.
+
+\subsection{\texttt{stageB.py}: the two-dimensional inversion}
+
+\begin{lstlisting}
+LG_MU=3000 python -u stageB.py dataa dataa 1.0 40 ../out/start_data.npz
+\end{lstlisting}
+Arguments: kernel tag, output tag, regularisation weight $\lambda$ (1.0), maximum number of
+iterations (40), start wall. Output: \path{../out/fitB_<out tag>.npz}, rewritten after every accepted
+iteration, so an interrupted run can be continued by passing that file as the start wall.
+
+One line is printed per iteration:
+\begin{lstlisting}
+it 7: chi2/N 1.518  rms resid 1.016 %  A 0.14979  |delta-base| rms 0.063 max 0.199  rough 11.291
+\end{lstlisting}
+\begin{itemize}
+\item \code{chi2/N}: data $\chi^2$ per scan point, with $\sigma$ = point noise $\oplus$ model noise.
+A value near 1 means the map is fitted to the noise. The shipped scan ends at \ChiTwo: a few tenths of a percent
+of structure on a 1\,mm scale is not explained by the model. The synthetic scan of the closure test
+reaches 1.0, so the remainder is a property of the data, not of the optimiser.
+\item \code{rms resid}: rms of data minus model, in percent of the mean signal.
+\item \code{|delta-base|}: rms and maximum of the coefficients relative to the base wall, in mm.
+\item \code{rough}: the value of $\lVert Pc\rVert^2$.
+\end{itemize}
+The run ends after the given number of iterations or with ``\code{no improving step; stop}''. That
+message means that eight successive damped steps, down to sub-micrometre size, failed to lower the
+true $\chi^2$: the fit sits at a local minimum for the present kernels. It is the normal way for the
+second round to finish. If it appears in the very first iteration with a large $\chi^2$, the damping
+start value is too small for the state of the wall; raise \code{LG\_MU} (the chain uses 3000 for
+round a and 20\,000 for round b).
+
+With \code{LG\_VERB=1} every trial step is printed with its size, the $\chi^2$ predicted by the linear
+model and the $\chi^2$ actually achieved. A large gap between the two is the signature of kernels that
+no longer describe the wall; recompute them around the current azimuthal mean.
+
+\subsection{\texttt{final.py}: the high-statistics comparison}
+
+\begin{lstlisting}
+python final.py ../out/fitB_datab.npz data 40000
+\end{lstlisting}
+Traces the whole scan grid with the fitted wall (two seeds, to measure the model noise) and with the
+ideal cone of the measured aperture radius, fits the amplitude, prints the summary numbers and writes
+\path{../out/final_<tag>.npz} and a diagnostic PNG. All figures and the report are built from this
+file.
+
+\subsection{\texttt{pipeline.sh}: the whole chain}
+
+\begin{lstlisting}
+../tools/run_limited.sh ./pipeline.sh data
+\end{lstlisting}
+Runs Stage A, the re-gridding, two rounds of kernels and inversion, and \code{final.py}, with the
+settings given above. The tag names all intermediate files (\code{A\_data}, \code{start\_data},
+\code{kmodes\_dataa}, \code{fitB\_dataa}, \code{kmodes\_datab}, \code{fitB\_datab},
+\code{final\_data}). \code{edge.py} and \code{edge\_spot.py} must have been run before. With
+\code{LG\_SYNTH=<npz>} the chain runs on a synthetic scan instead of the measured one.
+
+\subsection{Exports, figures and the report}
+
+\begin{tabularx}{\textwidth}{@{}L{6.6cm}Y@{}}
+\toprule
+Command & Result \\
+\midrule
+\code{export\_wall.py <final npz> <dir>} & \code{wall\_delta.csv}, \code{wall\_coeffs.json} \\
+\code{collect\_numbers.py <final npz> <results dir>} & \code{numbers.json} (also reads the Geant4,
+reciprocity, closure and resolution results if present) \\
+\code{make\_figures.py <final npz> <dir> <lang>} & \code{inner\_surface.svg}, \code{response\_maps.svg} \\
+\code{make\_closure\_fig.py <synth npz> <final npz> <dir> <lang>} & \code{closure.svg},
+\code{closure\_numbers.json} \\
+\code{make\_ray\_svg.py <final npz> <dir> <lang>} & \code{ray\_animation.svg} (needs Node.js) \\
+\code{build\_page.py <final npz> <results dir> <out html> <lang> [github] [gitlab]} & one single-file
+report page \\
+\code{make\_report.sh <final npz>} & all of the above for \code{zh} and \code{en} \\
+\bottomrule
+\end{tabularx}
+
+\code{<lang>} is \code{zh} or \code{en}. All strings shown in figures and pages live in
+\path{web/i18n/zh.json} and \path{web/i18n/en.json}; the code contains no display text.
+
+\begin{table}[H]
+\caption{Environment variables.}\label{tab:env}
+\begin{tabularx}{\textwidth}{@{}L{2.6cm}L{3.4cm}Y@{}}
+\toprule
+Variable & Used by & Meaning (default) \\
+\midrule
+\code{LG\_GPU} & \code{lgtrace.py} & 1: trace on the GPU; 0: CPU. The wrapper sets 1; without the wrapper the default is 0 \\
+\code{LG\_CPUS} & \code{run\_limited.sh} & number of CPU cores (chosen from the idle cores, 4--24) \\
+\code{LG\_MEM} & \code{run\_limited.sh} & hard memory limit of the job (\code{6G}) \\
+\code{LG\_SCAN} & \code{load\_scan.py} & path of the scan CSV (\path{data/scan_summary.csv}) \\
+\code{LG\_SYNTH} & \code{stageA.py}, \code{stageB.py}, \code{final.py} & \code{.npz} with a synthetic scan that replaces the measured one \\
+\code{LG\_TAG} & \code{stageA.py} & name of the Stage-A output, \code{A\_<tag>.npz} \\
+\code{LG\_RCUT} & \code{stageB.py} & fit radius in mm (8.0) \\
+\code{LG\_NRAY} & \code{stageB.py} & rays per scan point in each iteration (20\,000) \\
+\code{LG\_MU} & \code{stageB.py} & start value of the damping (3000) \\
+\code{LG\_BROYDEN} & \code{stageB.py} & 1: secant correction of the Jacobian (1) \\
+\code{LG\_VERB} & \code{stageB.py} & 1: print every trial step (0) \\
+\code{PY} & shell drivers & Python interpreter (\path{../.venv/bin/python}) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ====================================================================== 6
+\section{Validation tools}
+\label{sec:validation}
+
+The checks answer three different questions: is the tracer right, can the inversion recover a known
+answer, and how much does the result depend on the assumptions. Table~\ref{tab:valid} collects the
+results for the shipped scan.
+
+\begin{table}[H]
+\caption{Validation results.}\label{tab:valid}
+\begin{tabularx}{\textwidth}{@{}L{3.9cm}L{3.9cm}Y@{}}
+\toprule
+Check & Result & Verdict \\
+\midrule
+Geant4, ideal cone & $T=0.209\pm0.002$, flat & pass; theory 0.2090 \\
+Geant4, fitted wall & ratio $\GfourRatio\pm\GfourRatioErr$ & pass; \GfourNpoints{} points $\times$ \GfourNphot{} photons, normalised scatter \GfourPull \\
+GPU against CPU & identical ray by ray & pass; at most 1 ray per point differs in double precision \\
+Reciprocity & ratio $\RecipRatio\pm\RecipErr$ & pass \\
+Jacobian test & correlation 0.91--0.98 & pass; slope 0.93--1.0 \\
+Closure test, the map & residual \ClMapRms\,\% & pass; fitted to the noise \\
+Closure test, the wall & correlation \ClCorrAll & \textbf{fails}; \ClRmsTrue\um{} true, \ClRmsRec\um{} recovered \\
+Free reflectivity & $R=0.94$ & no clear improvement; geometry still needed \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Geant4}
+
+\code{g4/lgsim} traces optical photons in a hollow cavity whose wall is an optical surface of type
+\code{dielectric\_metal}, polished, with the given reflectivity. The cavity is either the ideal
+\code{G4Cons} or a \code{G4TessellatedSolid} built from a wall mesh.
+\begin{lstlisting}
+lgsim <mesh.txt | ideal> <points.txt> <photons per point> <out.txt> [spot] [smax] [refl] [seed]
+\end{lstlisting}
+\code{spot} $>0$ is a Gaussian sigma, $<0$ a uniform disc of radius $-$\code{spot} (mm); \code{smax}
+restricts the launch cone as in the tracer. The output has one line per source point:
+$x$, $y$, detected, emitted, $T$.
+
+\emph{Ideal cone.}
+\begin{lstlisting}
+cd src && python test_ideal_cone.py                 # tracer: T(rho), flat at 0.209
+cd ../g4 && build/lgsim ideal run/radial.txt 20000 run/ideal.out 0 0.7 1.0 1
+\end{lstlisting}
+
+\emph{Fitted wall.}
+\begin{lstlisting}
+cd g4
+./run_final.sh ../out/fitB_datab.npz        # mesh export, 12 parallel jobs, comparison
+\end{lstlisting}
+The mesh has $1440\times251$ vertices, about 720\,000 triangles; facets are $0.25^\circ$ wide and
+0.4\,mm long, fine enough that faceting does not show at the present precision. Tracking in the
+tessellated solid costs about 10\,ms per photon (the ideal \code{G4Cons} needs 16\,\textmu s), which is why
+Geant4 is used for checking and not for fitting. \code{run\_final.sh} starts one process per point list (12 lists of 10 points here), each of
+about 0.7\,GB; 4000 photons per point take roughly ten minutes.
+\code{g4\_compare.py} traces the same points with the tracer at high statistics and prints the ratio
+of the mean transmissions, the normalised scatter (1 for pure statistics) and the correlation.
+
+Result: ratio $\GfourRatio\pm\GfourRatioErr$, normalised scatter \GfourPull, correlation \GfourCorr.
+
+\subsection{GPU against CPU}
+
+\begin{lstlisting}
+python test_gpu_vs_cpu.py
+\end{lstlisting}
+Traces the same points on the CPU (double precision), on the GPU in double precision and on the GPU
+in single precision. In double precision the GPU agrees with the CPU to at most one ray per point.
+Single precision is unbiased (mean difference $2\times10^{-7}$ in $T$) with a few rays per point
+changing fate, as expected for marginal rays.
+
+\subsection{Reciprocity}
+
+\begin{lstlisting}
+LG_GPU=0 python test_reciprocity.py ../out/fitB_datab.npz
+\end{lstlisting}
+For a lossless specular guide lit with the same Lambertian radiance from both ends, the flux from
+entrance to exit equals the flux from exit to entrance. A wrong intersection, or a normal that is
+inconsistent with the surface, breaks this identity. The script traces both directions on the CPU for
+a smooth wall, two random rough walls and the fitted wall. For the fitted wall the ratio is
+$\RecipRatio\pm\RecipErr$; the forward flux also equals the exit area, as \'etendue requires.
+
+\subsection{Jacobian test}
+
+\begin{lstlisting}
+python test_jacobian.py dataa ../out/fitB_dataa.npz
+\end{lstlisting}
+Compares the kernel prediction $J\,\Delta c$ with the exact change of the map (200\,000 rays per
+point, common random numbers) for random smooth perturbations of 0.01--0.1\,mm rms, around the base
+wall and around a fitted wall.
+
+\subsection{Closure test}
+
+\begin{lstlisting}
+../tools/run_limited.sh ./closure.sh 1
+python make_closure_fig.py ../out/synth_cl1.npz ../out/final_cl1.npz ../results/en en
+\end{lstlisting}
+\code{make\_synth.py} builds a known wall: the Stage-A profile plus seven Gaussian bumps and dents
+(0.15--0.3\,mm high, 2--4\,mm wide along the arc, 6--12\,mm long), on a finer spline grid than the
+fit uses, so the truth is not exactly representable. It traces a synthetic scan and adds the measured
+point noise. \code{closure.sh} then runs \code{pipeline.sh} on it.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{fig/en/closure.png}
+\caption{Closure test. Left: the true local unevenness put in. Middle: the unevenness recovered from
+the synthetic scan, on the same colour scale. Right: azimuthal mean profiles. Both walls give the same
+response map within the noise.}\label{fig:closure}
+\end{figure}
+
+The outcome (Figure~\ref{fig:closure}) has two parts and both matter. The synthetic map is reproduced
+to the noise: residual \ClMapRms\,\%, $\chi^2/N\approx1$. The pipeline converges properly. The wall is
+not recovered: the correlation between true and recovered local unevenness is \ClCorrAll, the
+recovered amplitude is \ClRmsRec\um{} against \ClRmsTrue\um{} true, and the azimuthal mean profile
+is off by \ClProfErr\um{} rms.
+
+\subsection{Resolution study}
+
+\begin{lstlisting}
+python study_resolution.py cl1b ../out/synth_cl1.npz ../out/fitB_cl1b.npz
+\end{lstlisting}
+A singular-value decomposition of the Jacobian orders the wall patterns by how strongly they change
+the scan. A pattern with singular value $s_k$ is visible at one standard deviation if its coefficient
+amplitude exceeds $\sigma_T/s_k$, with $\sigma_T$ the noise of one scan point in transmission units.
+Table~\ref{tab:res} gives, for the leading $k$ patterns, that smallest visible amplitude, the share of
+the true test wall's deformation power that lies in them, and the correlation between the true and
+the recovered wall inside them.
+
+\begin{table}[H]
+\centering
+\caption{What the scan can see (closure test). The spectrum falls by three orders of magnitude over
+the 1032 patterns.}\label{tab:res}
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+Leading patterns $k$ & Smallest visible amplitude [\textmu m] & Share of true wall [\%] & Correlation \\
+\midrule
+\ResolutionRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+The leading 30--150 patterns are seen down to \ResAminLo--\ResAminHi\um{} and are recovered with a correlation of
+\ResCorrLo--\ResCorrHi, but they hold only about \ResFracVis\,\% of the test wall's deformation.
+Beyond a few hundred patterns the scan is blind at the 0.1\,mm level.
+
+\subsection{Further studies}
+
+\begin{tabularx}{\textwidth}{@{}L{4.7cm}Y@{}}
+\toprule
+Script & Purpose \\
+\midrule
+\code{study\_deformations.py} & response maps for a set of simple test deformations (barrel, hourglass,
+single bumps, entrance flare, exit pinch) \\
+\code{study\_reflectivity.py} & radial profile of the ideal cone for mirror reflectivities below 1,
+against the data \\
+\code{study\_launch\_cone.py} & checks that the launch-angle cut \code{smax} loses no detected light \\
+\code{look\_data.py} & quick plots of the raw scan \\
+\bottomrule
+\end{tabularx}
+
+% ====================================================================== 7
+\section{Outputs and file formats}
+
+\subsection{Input scan}
+
+\path{data/scan_summary.csv} has one line per scan point with the columns \code{idx\_x},
+\code{idx\_y}, \code{direction}, \code{cmd\_x\_mm}, \code{cmd\_y\_mm}, \code{pos\_x\_mm},
+\code{pos\_y\_mm}, \code{timestamp}, \code{n\_events}, \code{n\_saved}, \code{probe\_V},
+\code{passed}, \code{acq\_time\_s}. The grid indices \code{idx\_x}, \code{idx\_y} place each point;
+the code uses the positions \code{pos\_x\_mm}, \code{pos\_y\_mm}, the signal \code{probe\_V}
+(volts) and the flag \code{passed}. The grid must be regular and complete.
+
+\subsection{Intermediate files in \texttt{out/}}
+
+\begin{tabularx}{\textwidth}{@{}L{3.5cm}Y@{}}
+\toprule
+File & Arrays \\
+\midrule
+\code{edge.npz} & \code{cx}, \code{cy} centre (stage coordinates); \code{ped}, \code{ped\_rms}
+pedestal; \code{fourier[9,2]} cosine and sine coefficients of $r_\mathrm{ap}(\varphi)$;
+\code{phi}, \code{r\_edge}, \code{sigma}, \code{level} per-sector edge fits; \code{spot\_radius},
+\code{dr\_disc} from \code{edge\_spot.py} \\
+\code{A\_<tag>.npz} & \code{p} profile coefficients (and the reflectivity if fitted); \code{NZ};
+\code{rho}, \code{dat}, \code{err}, \code{T}, \code{A} the fitted radial profile; \code{zz},
+\code{d0} the profile $\delta_0(z)$ \\
+\code{start\_<tag>.npz} & \code{c[24, NZ+3]}, \code{NZ}, \code{NPHI}, \code{refl} \\
+\code{kmodes\_<tag>.npz} & \code{A[nk, 13, 3, nrho]} harmonic amplitudes; \code{QS[13,3]} the
+harmonics $q$ of each mode ($-1$ = unused); \code{rho}; \code{p} base profile; \code{T0} base map;
+\code{NPHI}, \code{NZ}, \code{refl} \\
+\code{fitB\_<tag>.npz} & \code{c[24, 43]} fitted coefficients; \code{base}; \code{A} amplitude;
+\code{hist} ($\chi^2/N$, residual, amplitude per iteration); \code{T}, \code{xs}, \code{ys},
+\code{dat} model, positions and data of the fitted points; \code{lam}, \code{NPHI}, \code{NZ},
+\code{refl} \\
+\code{final\_<tag>.npz} & \code{x}, \code{y} scan axes; \code{S[nx,ny]} pedestal-subtracted data;
+\code{M} model; \code{T} transmission; \code{Mideal} ideal cone; \code{A}; \code{R} distance from the
+centre; \code{cx}, \code{cy}; \code{phi[361]}, \code{z[201]}, \code{DEL[361,201]} the wall on a grid;
+\code{c}; \code{refl}; \code{mc} model noise \\
+\code{synth\_<tag>.npz} & \code{S} synthetic scan; \code{c\_true[48,23]}; \code{bumps}; \code{A} \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Results}
+
+\code{wall\_delta.csv}: three comment lines, then the columns \code{phi\_deg} (0--359, step 1),
+\code{z\_mm} (0--100, step 0.5), \code{r\_cad\_mm}, \code{delta\_mm}, \code{delta\_azimuthal\_mean\_mm},
+\code{delta\_local\_mm}.
+
+\code{wall\_coeffs.json}: \code{NPHI}, \code{NZ} and the coefficient matrix \code{c[NPHI][NZ+3]} in
+mm. It can be fed back to the tracer:
+\begin{lstlisting}
+import json, numpy as np, lgtrace as lg
+c = np.array(json.load(open('../results/wall_coeffs.json'))['c'])
+T = lg.transmission([0.0, 2.0], [0.0, -1.0], coeffs=c, nray=20000, smax=0.55, sig=-0.34)
+\end{lstlisting}
+\code{sig} $<0$ is a disc of radius $-$\code{sig}; \code{sig} $>0$ a Gaussian sigma; positions are
+relative to the aperture centre.
+
+\code{numbers.json}: the fit quality (\code{rms}, \code{rms\_id}, \code{chi2}, \code{corr},
+\code{rms\_ring}), the wall statistics (\code{loc\_rms}, \code{loc\_min}, \code{loc\_max} in \textmu m;
+\code{mean\_min}, \code{mean\_max} in mm), the aperture (\code{r\_ap}, \code{spot\_r}), and the blocks
+\code{g4}, \code{recip}, \code{closure}, \code{resolution} when those checks have been run.
+
+Geant4 mesh (\code{mesh.txt}): first line ``\code{NPHI NZ}''; then \code{NZ} lines, each with $z$ and
+the \code{NPHI} wall radii at $\varphi_i=2\pi i/\code{NPHI}$, in mm.
+
+% ====================================================================== 8
+\section{Adapting the toolkit to another light guide or scan}
+\label{sec:adapt}
+
+\textbf{Geometry.} The cone is defined by three constants, which appear in four places and must agree:
+\begin{itemize}
+\item \path{src/lgtrace.py}: \code{R1, R2, L} (and \code{SLOPE} derived from them);
+\item \path{src/lgcl.py}: the macros \code{R1}, \code{LEN}, \code{SLOPE} in the OpenCL source
+(\code{SLOPE} is written out as a number);
+\item \path{web/lgtrace.js}: \code{R1, R2, L} for the browser demonstration;
+\item \path{g4/lgsim.cc}: \code{R1, R2, LEN}, and the sizes of the world box and of the two photon
+dumps if the guide is much larger.
+\end{itemize}
+\code{export\_wall.py} and \code{make\_ray\_svg.py} also write out $r_\mathrm{CAD}=8.75-0.0475\,z$.
+A shape that is not a straight cone needs a different reference surface in the function \code{\_f}
+and in the bounding-cone bracket; the B-spline part carries over unchanged.
+
+\textbf{Scan.} Any regular rectangular grid works. Either provide a CSV with the same columns and
+point \code{LG\_SCAN} to it, or edit \code{load()} in \path{src/load_scan.py}; it must return the axes
+\code{x}, \code{y} and the signal \code{V[ix, iy]}. In \path{src/edge.py} set the first guess of the
+centre and the radial windows used for the pedestal ($r>10$) and for the edge fit ($7.6<r<9.6$).
+
+\textbf{Fit radius.} \code{LG\_RCUT} (8.0\,mm) must stay inside the aperture by more than the spot
+radius, so that the spot is never clipped at a fitted point. The polar grid in
+\code{kernel\_modes.py} (57 radii of 0.15\,mm) must cover it.
+
+\textbf{Launch cone.} \code{smax} must exceed the largest $\sin\theta$ of any detected ray, roughly
+$R_2/R_1$ plus a margin. Check with \code{study\_launch\_cone.py}. Too small a value silently loses
+light; too large a value only costs time.
+
+\textbf{Resolution of the wall.} $N_\varphi$ is an argument of \code{kernel\_modes.py} and
+\code{refine.py} writes 24 azimuthal knots for a Stage-A input; $N_z$ is the second argument of
+\code{refine.py}. Finer grids resolve thinner arcs but add poorly constrained parameters; cost grows
+with $N_z\times(N_\varphi/2+1)$ kernel runs.
+
+\textbf{Regularisation.} $\lambda$ is the third argument of \code{stageB.py}. With the damped
+iterations the result depends weakly on it: the fit stays close to the start wall anyway. To see the
+effect of the prior, change the start wall rather than $\lambda$.
+
+\textbf{Noise and statistics.} The point noise of the scan (\code{SIGD} in \code{stageB.py}, also
+used in \code{final.py} and \code{collect\_numbers.py}) is $2.0\times10^{-4}$\,V for the shipped data;
+estimate it for new data from the high-pass residual of the plateau. Rays per point: 12\,000 for the
+kernels, 20\,000 per iteration, 40\,000 for the final map. Halving them roughly halves the run time
+and raises the model noise by 30--40\,\%.
+
+% ====================================================================== 9
+\section{Limits and interpretation}
+\label{sec:limits}
+
+\textbf{The solution is not unique.} Different walls give the same response map. The scan constrains
+about 100--150 combinations of the wall shape, down to 1--10\um; a broad, gentle bump leaves almost
+no trace even at 0.2--0.3\,mm height. The damped iterations stay near the start wall, so the result is
+the wall with the least unevenness among those that fit. The local unevenness of \LocRms\um{} rms is
+a lower bound on what the real wall must have, not an estimate of what it has.
+
+\textbf{The azimuthal mean profile is poorly fixed.} It is strongly degenerate with the overall signal
+scale and with the exit radius. Two runs on the same data returned profiles that differ by several
+tenths of a millimetre near the exit while fitting equally well. Reliable are only the entrance radius
+(\RAp\,mm, measured directly from the scan edge) and the statement that the bore is narrower than CAD.
+
+\textbf{Everything is attributed to geometry.} By assumption the mirror reflectivity is 1, the PMT
+response is uniform in position and angle, and the source is an ideal Lambertian disc. Real
+reflectivity variations, the seam of the reflective film, dust, or photocathode non-uniformity would
+all be read as wall unevenness.
+
+\textbf{Unexplained structure.} The fit to the shipped scan ends at $\chi^2/N=\ChiTwo$, not 1: a few
+tenths of a percent of correlated structure on a 1\,mm scale remains. The closure test shows that the pipeline
+reaches the noise when the truth lies inside the model, so this remainder is real structure that the
+model (smooth wall, perfect mirror, uniform detector) cannot produce.
+
+\textbf{The entrance rim.} In the outermost 0.4\,mm ring of the aperture the residual is about
+\RmsRing\,\% per point, and 2--4\,\% after azimuthal averaging. The measured signal drops earlier
+than the model inside the aperture but has no tail outside, as if a band about 0.1\,mm wide at the rim
+were lossy (a chamfer, or film that stops short of the edge). This is below the resolution of the
+model and the ring is excluded from the fit.
+
+\textbf{Resolution.} The deviation field has 2.5\,mm cells along the axis and $15^\circ$ in azimuth
+(2.2\,mm of arc at the entrance, 1.0\,mm at the exit). Finer structure is smoothed.
+
+\textbf{Orientation of the azimuth.} $\varphi$ follows the scan axes. Whether the figure is a mirror
+image of the hardware depends on the stage orientation.
+
+\textbf{What would pin down the real wall.} Independent information, each piece constraining a
+further set of shape combinations:
+\begin{itemize}
+\item scans with a collimated beam at several incidence angles (each angle selects different ray
+families, where the diffuse source averages over all of them);
+\item angle-resolved or position-resolved readout at the exit instead of one integrating PMT;
+\item a scan from the exit side;
+\item direct profilometry of the wall, or a coordinate measurement of the bore at a few heights, to
+fix the azimuthal mean.
+\end{itemize}
+The resolution study (\code{study\_resolution.py}) can be repeated for a simulated additional
+measurement to see how many more patterns it would make visible before taking the data.
+
+% ====================================================================== 10
+\section{Troubleshooting}
+
+\trouble{\code{IndexError} or ``no devices'' when the GPU tracer starts}{\code{pyopencl} found no GPU device. Check \code{clinfo -l}; make sure the user is in the
+\code{render} and \code{video} groups; on AMD check that the ROCm OpenCL ICD is installed. To run
+without a GPU set \code{LG\_GPU=0}.}
+\trouble{The desktop stutters or the GPU driver resets during a run}{The tracer submits slices of about 0.6\,s (\code{slice\_s} in \code{lgcl.transmission}). Lower it if
+the GPU is shared with interactive work. Run only one GPU job at a time.}
+\trouble{Results change after editing \code{lgtrace.py}, or \code{numba} complains about a cached function}{Delete \path{src/__pycache__}. The compiled functions are cached there and rebuilt on the next run
+(a few seconds).}
+\trouble{A job dies with exit code 137, or ``Killed''}{It exceeded the memory limit of the wrapper. The pipeline needs less than 1\,GB; a Geant4 job with
+the 720\,000-facet mesh about 0.7\,GB. Raise the limit with \code{LG\_MEM=12G} only if the job is
+known to need it.}
+\trouble{``no improving step; stop'' in the first iteration}{See Section~\ref{sec:pipeline}: raise \code{LG\_MU}, or recompute the kernels around the current wall.
+At the end of a converged run the message is normal.}
+\trouble{\code{stageB.py} converges, then the final $\chi^2$ is higher}{\code{final.py} uses a different seed and more rays; differences of a few hundredths in $\chi^2/N$
+are Monte Carlo noise. Larger differences mean the fit followed the noise of its own ray set; raise
+\code{LG\_NRAY}.}
+\trouble{The manual figures come out empty, or Firefox refuses to start}{Another Firefox is using the same profile. \code{make\_manual\_figs.sh} keeps a private profile in
+\path{docs/manual/.ffprofile}; delete that directory and run again.}
+\trouble{Geant4: ``Overlapping daughter with mother volume''}{The world box in \code{lgsim.cc} must contain the cavity and both photon dumps; enlarge it when the
+guide is longer than 100\,mm.}
+\trouble{Geant4: ``Particle e- without a Process Manager''}{This appears when \code{G4OpticalPhysics} is registered alone. Keep the minimal physics list of
+\code{lgsim.cc}: the optical photon only, with transportation and the optical boundary process
+(\code{G4OpBoundaryProcess}).}
+\trouble{Geant4 is very slow}{Tracking in the tessellated solid costs about 10\,ms per photon whatever the mesh size between
+180\,000 and 720\,000 facets. Use few points with a few thousand photons, in parallel processes.}
+
+% ====================================================================== 11
+\section{Resource policy: \texttt{tools/run\_limited.sh}}
+\label{sec:resources}
+
+The development machine is shared, so every long or parallel job is started through a wrapper that
+makes it impossible for a simulation to hurt the machine.
+\begin{lstlisting}
+tools/run_limited.sh <command> [arguments...]
+\end{lstlisting}
+\begin{itemize}
+\item The command runs in a transient \code{systemd} user scope with \code{MemoryMax} (default
+6\,GB) and no swap: a job that exceeds the limit is killed at once and nothing else is affected.
+\item The number of cores is chosen when the job starts: the idle cores minus four spare, between 4
+and 24. It sets the CPU quota of the scope and the thread counts of \code{numba}, OpenMP and BLAS.
+\item The job runs at \code{nice 19} with idle I/O priority, so other work always wins.
+\item \code{LG\_GPU=1} is exported, so tracing runs on the GPU unless \code{LG\_GPU=0} is given.
+\end{itemize}
+Overrides: \code{LG\_MEM=12G}, \code{LG\_CPUS=8}, \code{LG\_GPU=0} in front of the command. On a
+machine without \code{systemd} user sessions run the commands directly and set \code{LG\_GPU=1} and
+\code{NUMBA\_NUM\_THREADS} by hand.
+
+The GPU is outside the cgroup accounting. The tracer therefore limits itself: host buffers of a few
+megabytes and sub-second slices. Run one GPU job at a time.
+
+% ====================================================================== 12
+\section{Author, contact and citation}
+
+LGWallRecon was written by Hengne Li (李衡讷), South China Normal University.
+
+Contact: \code{Hengne.Li@cern.ch}, \code{Hengne.Li@m.scnu.edu.cn}.
+
+Repositories:
+\begin{itemize}
+\item GitHub: \GithubURL
+\item GitLab (SCNU group): \GitlabURL
+\end{itemize}
+
+To cite the toolkit:
+\begin{quote}
+Hengne Li, \emph{LGWallRecon: light-guide inner-wall reconstruction from an entrance-face scan},
+software, 2026. Repository: \GithubURL
+\end{quote}
+
+When quoting results obtained with it, state the assumptions of the model (perfect specular wall,
+uniform detector, Lambertian source) and that the reconstructed wall is the minimum-unevenness
+solution of a non-unique inverse problem.
+
+\end{document}

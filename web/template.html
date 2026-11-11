@@ -1,0 +1,417 @@
+<title>{{t:page_title}}</title>
+<!-- LGWallRecon -- light-guide inner-wall reconstruction from an entrance-face scan
+     Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn> -->
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* layout: one reading column; the 3-D light-guide bench opens the page, figures follow as a lab report */
+:root {
+  --bg: #f4f5f7; --surface: #fcfcfb; --ink: #0e1116; --ink2: #4a4f57; --muted: #868b93; --rule: #dcdfe4;
+  --accent: #1c5cab; --accent-ink: #ffffff; --photon: #e39a00; --lost: #8ea6c2; --bench: #10151c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
+  --good: #0a7a0a;
+  --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c0f13; --surface: #161a20; --ink: #eef1f5; --ink2: #b9c0ca; --muted: #7f8792; --rule: #2a3038;
+  --accent: #6da7ec; --accent-ink: #0c0f13; --photon: #f2b01e; --lost: #8ea6c2; --bench: #07090c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
+  --good: #3fc13f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0c0f13; --surface: #161a20; --ink: #eef1f5; --ink2: #b9c0ca; --muted: #7f8792; --rule: #2a3038;
+  --accent: #6da7ec; --accent-ink: #0c0f13; --photon: #f2b01e; --lost: #8ea6c2; --bench: #07090c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
+  --good: #3fc13f; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.7; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 44px; }
+header.top { display: flex; flex-direction: column; gap: 10px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+h1 { font-size: clamp(28px, 4.2vw, 44px); line-height: 1.15; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.3; margin: 0; font-weight: 700; text-wrap: balance; }
+h3 { font-size: 16px; margin: 0; font-weight: 700; }
+p { margin: 0; }
+.lead { font-size: 18px; color: var(--ink2); max-width: 46em; }
+.byline { font-size: 13.5px; color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 16px; }
+.prose { max-width: 44em; color: var(--ink2); display: flex; flex-direction: column; gap: 12px; }
+.prose b { color: var(--ink); }
+code, .num { font-family: var(--mono); font-size: .92em; }
+
+/* --- the bench: 3-D view + controls --- */
+.bench { background: var(--bench); color: var(--bench-ink); border-radius: 10px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 250px; }
+.bench .view { position: relative; min-width: 0; min-height: 440px; }
+#cv3d { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; }
+#cv3d:active { cursor: grabbing; }
+.bench .tags { position: absolute; left: 14px; top: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--bench-muted); pointer-events: none; }
+.bench .tags span::before { content: ""; display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; background: currentColor; }
+.bench .tags .t-hit { color: var(--photon); } .bench .tags .t-lost { color: var(--lost); }
+.bench .tags span b { color: var(--bench-ink); font-weight: 500; }
+.bench .ends { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: space-between; padding: 0 14px; font-size: 12px; color: var(--bench-muted); pointer-events: none; }
+.bench aside { border-left: 1px solid #232a33; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bench aside h3 { font-size: 13px; color: var(--bench-muted); font-weight: 500; }
+#cvmap { width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; cursor: crosshair; touch-action: none; background: #0b0f14; }
+.readout { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; color: var(--bench-muted); }
+.readout b { font-family: var(--mono); color: var(--bench-ink); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.readout .hit b { color: var(--photon); }
+.ctl { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctl button { font: inherit; font-size: 13px; color: var(--bench-ink); background: #1b222b; border: 1px solid #2c3540; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+.ctl button[aria-pressed="true"] { background: var(--photon); border-color: var(--photon); color: #14100a; }
+.ctl button:focus-visible, .zoomer button:focus-visible { outline: 2px solid var(--photon); outline-offset: 2px; }
+.hint { font-size: 12px; color: var(--bench-muted); line-height: 1.5; }
+
+/* --- headline figures --- */
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.facts div { padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.facts div + div { padding-left: 16px; border-left: 1px solid var(--rule); }
+.facts b { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.2; }
+.facts span { font-size: 13px; color: var(--ink2); line-height: 1.45; }
+
+/* --- figures --- */
+.fig { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.fig .pane { overflow: hidden; touch-action: pan-y; cursor: grab; }
+.fig .pane:active { cursor: grabbing; }
+.fig svg { display: block; width: 100%; height: auto; }
+.zoomer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--ink2); }
+.zoomer button { font: inherit; font-size: 13px; background: transparent; color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 3px 10px; cursor: pointer; min-width: 34px; }
+.zoomer .probe { margin-left: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink2); min-width: 0; }
+.scrollx { overflow-x: auto; }
+/* figure tokens follow the page theme (the standalone SVG files carry their own copy) */
+.lgfig { --ink: #0b0b0b; --ink2: #52514e; --muted: #898781; --grid: #e1e0d9; --axis: #b5b4ab; --surface: #fcfcfb; --mark: #0b0b0b; font-family: var(--sans); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lgfig { --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #55554f; --surface: #161a20; --mark: #f0efec; } }
+:root[data-theme="dark"] .lgfig { --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #55554f; --surface: #161a20; --mark: #f0efec; }
+.lgfig .bg { fill: var(--surface); } .lgfig text { fill: var(--ink2); font-size: 12px; }
+.lgfig .tl { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; } .lgfig .al { fill: var(--ink2); font-size: 12.5px; }
+.lgfig .h1 { fill: var(--ink); font-size: 21px; font-weight: 650; } .lgfig .h2 { fill: var(--ink); font-size: 14.5px; font-weight: 650; }
+.lgfig .sub { fill: var(--ink2); font-size: 12.5px; } .lgfig .note { fill: var(--muted); font-size: 11.5px; }
+.lgfig .frame, .lgfig .tick { stroke: var(--axis); stroke-width: 1; } .lgfig .grid { stroke: var(--grid); stroke-width: 1; }
+.lgfig .iso0 { stroke: var(--mark); stroke-width: .7; stroke-opacity: .55; stroke-dasharray: 3 3; }
+.lgfig .line { stroke: #2a78d6; stroke-width: 2; fill: none; } .lgfig .line2 { stroke: #eb6834; stroke-width: 2; fill: none; }
+.lgfig .dot { fill: var(--ink); } .lgfig .lead { stroke: var(--mark); stroke-width: .8; }
+.lgfig .lab { fill: var(--ink); font-size: 11.5px; font-weight: 600; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+figcaption { font-size: 14px; color: var(--ink2); max-width: 46em; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* --- method steps, checks --- */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: st; border-top: 2px solid var(--ink); }
+.steps li { list-style: none; padding: 14px 16px 0 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; counter-increment: st; font-size: 14.5px; color: var(--ink2); line-height: 1.6; }
+.steps li::before { content: counter(st); font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.steps li b { color: var(--ink); font-size: 15.5px; }
+ol.steps { margin: 0; padding: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; }
+td.v { font-family: var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+td .ok { color: var(--good); font-weight: 600; }
+.caveats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; }
+.caveats div { display: flex; flex-direction: column; gap: 4px; font-size: 14.5px; color: var(--ink2); border-top: 1px solid var(--rule); padding-top: 12px; min-width: 0; }
+.caveats b { color: var(--ink); }
+.files { font-family: var(--mono); font-size: 13px; color: var(--ink2); display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; }
+.files span { font-family: var(--sans); min-width: 0; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px; }
+@media (max-width: 820px) {
+  .bench { grid-template-columns: minmax(0, 1fr); } .bench aside { border-left: 0; border-top: 1px solid #232a33; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .bench aside h3 { grid-column: 1 / -1; } .bench .view { min-height: 300px; }
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .facts div:nth-child(3) { padding-left: 0; border-left: 0; } .facts div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .steps { grid-template-columns: minmax(0, 1fr); } .caveats { grid-template-columns: minmax(0, 1fr); }
+  .fig .wide { min-width: 760px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">{{t:eyebrow}}</div>
+  <h1>{{t:h1}}</h1>
+  <p class="lead">{{LEAD}}</p>
+  <p class="byline">{{t:author_line}}</p>
+</header>
+
+<section>
+  <div class="bench">
+    <div class="view">
+      <canvas id="cv3d" aria-label="{{t:aria_3d}}"></canvas>
+      <div class="tags"><span class="t-hit"><b>{{t:tag_hit}}</b></span><span class="t-lost"><b>{{t:tag_lost}}</b></span></div>
+      <div class="ends"><span>{{t:end_in}}</span><span>{{t:end_out}}</span></div>
+    </div>
+    <aside>
+      <h3>{{t:aside_title}}</h3>
+      <canvas id="cvmap" width="400" height="400" aria-label="{{t:aria_map}}"></canvas>
+      <div>
+        <div class="readout">
+          <span>{{t:ro_pos}}</span><b id="ro-pos">–</b>
+          <span>{{t:ro_n}}</span><b id="ro-n">0</b>
+          <span class="hit">{{t:ro_hit}}</span><b id="ro-hit" class="hit">0</b>
+          <span>{{t:ro_t}}</span><b id="ro-t">–</b>
+          <span>{{t:ro_tm}}</span><b id="ro-tm">–</b>
+        </div>
+      </div>
+      <div class="ctl">
+        <button id="b-play" aria-pressed="true">{{t:btn_pause}}</button>
+        <button id="b-wall" aria-pressed="true">{{t:btn_wall_fit}}</button>
+        <button id="b-map" aria-pressed="false">{{t:btn_map_model}}</button>
+        <button id="b-view">{{t:btn_view}}</button>
+      </div>
+      <p class="hint">{{t:hint}}</p>
+    </aside>
+  </div>
+  <div class="facts">{{FACTS}}</div>
+</section>
+
+<section>
+  <h2>{{t:h_wall}}</h2>
+  <div class="prose">{{P_WALL}}</div>
+  <figure>
+    <div class="fig">
+      <div class="scrollx"><div class="pane wide" id="pane-wall">{{SVG_WALL}}</div></div>
+      <div class="zoomer"><button id="z-in" aria-label="{{t:zoom_in}}">＋</button><button id="z-out" aria-label="{{t:zoom_out}}">－</button><button id="z-reset">{{t:zoom_reset}}</button><span>{{t:zoom_hint}}</span><span class="probe" id="probe">{{t:probe_idle}}</span></div>
+    </div>
+    <figcaption>{{t:cap_wall}}</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>{{t:h_maps}}</h2>
+  <div class="prose">{{P_MAPS}}</div>
+  <figure>
+    <div class="fig"><div class="scrollx"><div class="wide">{{SVG_MAPS}}</div></div></div>
+    <figcaption>{{t:cap_maps}}</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>{{t:h_method}}</h2>
+  <ol class="steps">{{STEPS}}</ol>
+  <div class="prose">{{t:p_method}}</div>
+</section>
+
+<section>
+  <h2>{{t:h_check}}</h2>
+  <div class="prose">{{t:p_check}}</div>
+  <div class="scrollx"><table>
+    <thead><tr><th>{{t:th_check}}</th><th>{{t:th_result}}</th><th>{{t:th_note}}</th></tr></thead>
+    <tbody>{{CHECK_ROWS}}</tbody>
+  </table></div>
+  {{FIG_CLOSURE}}
+</section>
+
+<section>
+  <h2>{{t:h_limits}}</h2>
+  <div class="caveats">{{CAVEATS}}</div>
+</section>
+
+<section>
+  <h2>{{t:h_files}}</h2>
+  <div class="prose">{{t:p_files}}</div>
+  <div class="files">{{FILES}}</div>
+</section>
+<footer>{{FOOT}}</footer>
+</div>
+
+<script>
+const DATA = {{DATA_JSON}};
+{{LGTRACE_JS}}
+</script>
+<script>
+(function () {
+  'use strict';
+  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const S8 = b64(DATA.S8), M8 = b64(DATA.M8), T16 = new Uint16Array(b64(DATA.T16).buffer);
+  const NX = DATA.nx, NY = DATA.ny;
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // ------------------------------------------------------------------ walls
+  const NP = 72, NZM = 48;
+  const ZERO = new Array(DATA.nphi * DATA.nk).fill(0);
+  function buildWall(fitted) {
+    LG.setWall(fitted ? DATA.c : ZERO, DATA.nphi, DATA.nk);
+    const V = new Float32Array((NP + 1) * (NZM + 1) * 3), col = new Uint8Array(NP * NZM);
+    const loc = new Float32Array((NP + 1) * (NZM + 1));
+    for (let j = 0; j <= NZM; j++) {
+      const z = LG.L * j / NZM; let mean = 0; const d = [];
+      for (let i = 0; i < NP; i++) { const r = LG.wallRadius(2 * Math.PI * i / NP, z); d.push(r); mean += r / NP; }
+      for (let i = 0; i <= NP; i++) { const ph = 2 * Math.PI * i / NP, r = d[i % NP], o = (j * (NP + 1) + i) * 3;
+        V[o] = r * Math.cos(ph); V[o + 1] = r * Math.sin(ph); V[o + 2] = z; loc[j * (NP + 1) + i] = r - mean; }
+    }
+    const n = DATA.div.length;
+    for (let j = 0; j < NZM; j++) for (let i = 0; i < NP; i++) {
+      const a = j * (NP + 1) + i, v = (loc[a] + loc[a + 1] + loc[a + NP + 1] + loc[a + NP + 2]) / 4;
+      col[j * NP + i] = Math.max(0, Math.min(n - 1, Math.round((0.5 - v / (2 * DATA.vloc)) * (n - 1))));   // red = bump (v < 0)
+    }
+    return { V, col };
+  }
+  const walls = { fit: buildWall(true), ideal: buildWall(false) };
+  let fitted = true; LG.setWall(DATA.c, DATA.nphi, DATA.nk);
+  const divRGB = DATA.div.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+  // ------------------------------------------------------------------ 3-D view
+  const cv = document.getElementById('cv3d'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, yaw = -0.42, pitch = 0.24;
+  const YAW0 = yaw, PITCH0 = pitch;
+  function resize() { const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2); W = r.width; H = r.height; cv.width = Math.round(W * d); cv.height = Math.round(H * d); ctx.setTransform(d, 0, 0, d, 0, 0); }
+  let cyw, syw, cpt, spt, scale;
+  function cam() { cyw = Math.cos(yaw); syw = Math.sin(yaw); cpt = Math.cos(pitch); spt = Math.sin(pitch); scale = Math.min(W / 106, H / 30); }
+  const P = [0, 0, 0];
+  function proj(x, y, z) {
+    const X = z - 50, X1 = X * cyw + x * syw, Z1 = -X * syw + x * cyw, Y1 = y * cpt - Z1 * spt, Z2 = y * spt + Z1 * cpt;
+    const s = 420 / (420 + Z2) * scale; P[0] = W / 2 + X1 * s; P[1] = H / 2 - Y1 * s; P[2] = Z2; return P;
+  }
+  // photons
+  let photons = [], src = { x: DATA.src[0], y: DATA.src[1] }, nEmit = 0, nHit = 0, nDone = 0, playing = !reduce, flash = 0, lastEmit = 0;
+  const SPEED = 60, RATE = 30, FADE = 0.8, MAXP = 170;         // mm/s of animation, photons/s
+  function emit(now, age) {
+    const r = LG.lambert(src.x, src.y, Math.random(), Math.random()); if (!r) return;
+    const p = r.pts, n = p.length / 3, cum = new Float32Array(n);
+    for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + Math.hypot(p[3 * k] - p[3 * k - 3], p[3 * k + 1] - p[3 * k - 2], p[3 * k + 2] - p[3 * k - 1]);
+    photons.push({ p, cum, total: cum[n - 1], hit: r.detected, t0: now - (age || 0), done: false });
+    nEmit++; if (age === Infinity) { photons[photons.length - 1].t0 = -1e9; }
+  }
+  function reset(now) { photons = []; nEmit = 0; nHit = 0; nDone = 0; for (let k = 0; k < 70; k++) emit(now, Math.random() * 2.4); updateReadout(); }
+  function drawQuads(wall, far, order) {
+    const V = wall.V, col = wall.col;
+    for (const q of order) {
+      const j = (q / NP) | 0, i = q % NP, a = (j * (NP + 1) + i) * 3, b = a + 3, c = a + (NP + 1) * 3 + 3, d = a + (NP + 1) * 3;
+      proj(V[a], V[a + 1], V[a + 2]); const x1 = P[0], y1 = P[1];
+      proj(V[b], V[b + 1], V[b + 2]); const x2 = P[0], y2 = P[1];
+      proj(V[c], V[c + 1], V[c + 2]); const x3 = P[0], y3 = P[1];
+      proj(V[d], V[d + 1], V[d + 2]); const x4 = P[0], y4 = P[1];
+      const rgb = fitted ? divRGB[col[q]] : [150, 160, 172];
+      const ph = 2 * Math.PI * (i + 0.5) / NP, nd = Math.cos(ph) * cyw * spt * -1 + Math.sin(ph) * cpt;   // crude light from above
+      const sh = far ? 0.42 + 0.22 * (0.5 - 0.5 * nd) : 1;
+      ctx.fillStyle = far ? `rgb(${rgb[0] * sh | 0},${rgb[1] * sh | 0},${rgb[2] * sh | 0})` : `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.07)`;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.lineTo(x4, y4); ctx.closePath(); ctx.fill();
+      if (far) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke(); }
+    }
+  }
+  function ring(z, r, stroke, fill, lw) {
+    ctx.beginPath();
+    for (let k = 0; k <= 64; k++) { const ph = 2 * Math.PI * k / 64; proj(r * Math.cos(ph), r * Math.sin(ph), z); k ? ctx.lineTo(P[0], P[1]) : ctx.moveTo(P[0], P[1]); }
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1.2; ctx.stroke(); }
+  }
+  function frame(tms) {
+    const now = tms / 1000; cam();
+    ctx.clearRect(0, 0, W, H);
+    const wall = fitted ? walls.fit : walls.ideal;
+    // split quads into far side (inner face visible) and near side, sort back to front
+    const farQ = [], nearQ = [];
+    for (let i = 0; i < NP; i++) {
+      const ph = 2 * Math.PI * (i + 0.5) / NP, nx = Math.cos(ph), ny = Math.sin(ph);
+      const nz2 = ny * spt + (nx * cyw) * cpt;       // view-space depth component of the outward normal
+      for (let j = 0; j < NZM; j++) (nz2 > 0 ? farQ : nearQ).push(j * NP + i);
+    }
+    const depth = q => { const j = (q / NP) | 0, i = q % NP, a = (j * (NP + 1) + i) * 3; return proj(wall.V[a], wall.V[a + 1], wall.V[a + 2])[2]; };
+    const dm = new Map(); for (const q of farQ) dm.set(q, depth(q)); for (const q of nearQ) dm.set(q, depth(q));
+    farQ.sort((a, b) => dm.get(b) - dm.get(a)); nearQ.sort((a, b) => dm.get(b) - dm.get(a));
+    const pmtFirst = syw < 0;      // which end is farther from the camera
+    const drawPMT = () => { ring(100.6, 4.0, css('--photon'), `rgba(240,170,20,${0.18 + 0.6 * flash})`, 1.6); };
+    const drawEntr = () => { ring(0, 8.75, 'rgba(232,236,241,0.55)', null, 1.2); proj(src.x, src.y, 0); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(P[0], P[1], 3.2, 0, 6.3); ctx.fill(); };
+    (pmtFirst ? drawPMT : drawEntr)();
+    drawQuads(wall, true, farQ);
+    // photons
+    const hitCol = css('--photon'), lostCol = css('--lost');
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const ph of photons) {
+      const s = playing || ph.t0 < -1e8 ? Math.min((now - ph.t0) * SPEED, ph.total) : ph.sFrozen ?? Math.min((now - ph.t0) * SPEED, ph.total);
+      ph.sFrozen = s;
+      let alpha = ph.hit ? 0.95 : 0.62;
+      if (s >= ph.total) { if (!ph.done) { ph.done = true; ph.tEnd = now; nDone++; if (ph.hit) { nHit++; flash = 1; } updateReadout(); } if (playing) alpha *= Math.max(0, 1 - (now - ph.tEnd) / FADE); }
+      if (alpha <= 0) { ph.dead = true; continue; }
+      ctx.globalAlpha = alpha; ctx.strokeStyle = ph.hit ? hitCol : lostCol; ctx.lineWidth = ph.hit ? 1.6 : 0.9;
+      ctx.beginPath(); const p = ph.p, n = p.length / 3; proj(p[0], p[1], p[2]); ctx.moveTo(P[0], P[1]);
+      let hx = P[0], hy = P[1];
+      for (let k = 1; k < n; k++) {
+        if (ph.cum[k] <= s) { proj(p[3 * k], p[3 * k + 1], p[3 * k + 2]); ctx.lineTo(P[0], P[1]); hx = P[0]; hy = P[1]; }
+        else { const f = (s - ph.cum[k - 1]) / (ph.cum[k] - ph.cum[k - 1]); proj(p[3 * k - 3] + f * (p[3 * k] - p[3 * k - 3]), p[3 * k - 2] + f * (p[3 * k + 1] - p[3 * k - 2]), p[3 * k - 1] + f * (p[3 * k + 2] - p[3 * k - 1])); ctx.lineTo(P[0], P[1]); hx = P[0]; hy = P[1]; break; }
+      }
+      ctx.stroke();
+      if (s < ph.total) { ctx.fillStyle = ph.hit ? hitCol : lostCol; ctx.beginPath(); ctx.arc(hx, hy, ph.hit ? 2.4 : 1.8, 0, 6.3); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+    photons = photons.filter(p => !p.dead);
+    drawQuads(wall, false, nearQ);
+    (pmtFirst ? drawEntr : drawPMT)();
+    flash *= 0.92;
+    if (playing) { if (now - lastEmit > 1 / RATE && photons.length < MAXP) { emit(now); lastEmit = now; updateReadout(); } }
+    if (!reduce || playing) requestAnimationFrame(frame);
+  }
+  // ------------------------------------------------------------------ mini map
+  const cm = document.getElementById('cvmap'), mctx = cm.getContext('2d'); let showModel = false;
+  const seqRGB = DATA.seq.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+  const img = mctx.createImageData(NX, NY), off = document.createElement('canvas'); off.width = NX; off.height = NY;
+  function drawMap() {
+    const A = showModel ? M8 : S8, n = seqRGB.length;
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+      const v = A[i * NY + j], o = ((NY - 1 - j) * NX + i) * 4;
+      if (v === 0) { img.data[o] = 11; img.data[o + 1] = 15; img.data[o + 2] = 20; } else { const c = seqRGB[Math.min(n - 1, ((v - 1) / 254 * (n - 1)) | 0)]; img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; }
+      img.data[o + 3] = 255;
+    }
+    off.getContext('2d').putImageData(img, 0, 0);
+    mctx.imageSmoothingEnabled = false; mctx.drawImage(off, 0, 0, cm.width, cm.height);
+    const px = (src.x + DATA.cx - DATA.x0) / DATA.dx + 0.5, py = NY - ((src.y + DATA.cy - DATA.y0) / DATA.dy + 0.5), k = cm.width / NX;
+    mctx.strokeStyle = '#fff'; mctx.lineWidth = 3; mctx.beginPath(); mctx.arc(px * k, py * k, 12, 0, 6.3); mctx.stroke();
+    mctx.fillStyle = '#fff'; mctx.beginPath(); mctx.arc(px * k, py * k, 3.2, 0, 6.3); mctx.fill();
+  }
+  function pick(ev) {
+    const r = cm.getBoundingClientRect(), fx = (ev.clientX - r.left) / r.width, fy = (ev.clientY - r.top) / r.height;
+    const x = DATA.x0 + (fx * NX - 0.5) * DATA.dx - DATA.cx, y = DATA.y0 + ((1 - fy) * NY - 0.5) * DATA.dy - DATA.cy;
+    if (!LG.inside(x, y, 0)) return;
+    src.x = x; src.y = y; reset(performance.now() / 1000); drawMap(); if (reduce && !playing) requestAnimationFrame(frame);
+  }
+  let picking = false;
+  cm.addEventListener('pointerdown', e => { picking = true; cm.setPointerCapture(e.pointerId); pick(e); });
+  cm.addEventListener('pointermove', e => { if (picking) pick(e); });
+  cm.addEventListener('pointerup', () => { picking = false; });
+  const $ = id => document.getElementById(id);
+  function updateReadout() {
+    $('ro-pos').textContent = `(${(src.x + DATA.cx).toFixed(1)}, ${(src.y + DATA.cy).toFixed(1)}) mm`;
+    $('ro-n').textContent = nEmit; $('ro-hit').textContent = nHit;
+    $('ro-t').textContent = nDone >= 30 ? (100 * nHit / nDone).toFixed(0) + ' %' : '–';
+    const i = Math.round((src.x + DATA.cx - DATA.x0) / DATA.dx), j = Math.round((src.y + DATA.cy - DATA.y0) / DATA.dy);
+    $('ro-tm').textContent = fitted && i >= 0 && i < NX && j >= 0 && j < NY ? (T16[i * NY + j] / 65535 * 100 * DATA.tmax).toFixed(1) + ' %' : (fitted ? '–' : '20.9 %');
+  }
+  $('b-play').addEventListener('click', e => { playing = !playing; e.target.setAttribute('aria-pressed', playing); e.target.textContent = playing ? DATA.t.btn_pause : DATA.t.btn_play; if (playing) { const now = performance.now() / 1000; for (const p of photons) { if (!p.done) p.t0 = now - (p.sFrozen || 0) / SPEED; else p.tEnd = now; } if (reduce) requestAnimationFrame(frame); } });
+  $('b-wall').addEventListener('click', e => { fitted = !fitted; LG.setWall(fitted ? DATA.c : ZERO, DATA.nphi, DATA.nk); e.target.setAttribute('aria-pressed', fitted); e.target.textContent = fitted ? DATA.t.btn_wall_fit : DATA.t.btn_wall_ideal; reset(performance.now() / 1000); if (!playing) requestAnimationFrame(frame); });
+  $('b-map').addEventListener('click', e => { showModel = !showModel; e.target.setAttribute('aria-pressed', showModel); e.target.textContent = showModel ? DATA.t.btn_map_data : DATA.t.btn_map_model; drawMap(); });
+  $('b-view').addEventListener('click', () => { yaw = YAW0; pitch = PITCH0; if (!playing) requestAnimationFrame(frame); });
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, yaw, pitch }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; yaw = drag.yaw + (e.clientX - drag.x) * 0.008; pitch = Math.max(-1.2, Math.min(1.2, drag.pitch + (e.clientY - drag.y) * 0.008)); if (!playing) requestAnimationFrame(frame); });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  addEventListener('resize', () => { resize(); if (!playing) requestAnimationFrame(frame); });
+  resize(); reset(performance.now() / 1000); drawMap();
+  if (reduce) { for (const p of photons) p.t0 = -1e9; $('b-play').setAttribute('aria-pressed', 'false'); $('b-play').textContent = DATA.t.btn_play; }
+  requestAnimationFrame(frame);
+
+  // ------------------------------------------------------------------ zoomable wall figure + probe
+  const pane = $('pane-wall'), svg = pane.querySelector('svg');
+  if (svg) {
+    const vb0 = svg.getAttribute('viewBox').split(/\s+/).map(Number); let vb = vb0.slice();
+    svg.removeAttribute('width'); svg.removeAttribute('height');
+    const apply = () => svg.setAttribute('viewBox', vb.map(v => v.toFixed(2)).join(' '));
+    const zoomAt = (f, cx, cy) => { const w = Math.min(vb0[2], Math.max(vb0[2] / 40, vb[2] * f)), k = w / vb[2]; vb = [cx - (cx - vb[0]) * k, cy - (cy - vb[1]) * k, w, vb[3] * k]; clamp(); apply(); };
+    const clamp = () => { vb[0] = Math.max(vb0[0], Math.min(vb0[0] + vb0[2] - vb[2], vb[0])); vb[1] = Math.max(vb0[1], Math.min(vb0[1] + vb0[3] - vb[3], vb[1])); };
+    const toSvg = e => { const r = svg.getBoundingClientRect(); return [vb[0] + (e.clientX - r.left) / r.width * vb[2], vb[1] + (e.clientY - r.top) / r.height * vb[3]]; };
+    $('z-in').addEventListener('click', () => zoomAt(1 / 1.6, vb[0] + vb[2] / 2, vb[1] + vb[3] / 2));
+    $('z-out').addEventListener('click', () => zoomAt(1.6, vb[0] + vb[2] / 2, vb[1] + vb[3] / 2));
+    $('z-reset').addEventListener('click', () => { vb = vb0.slice(); apply(); });
+    pane.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const [x, y] = toSvg(e); zoomAt(e.deltaY > 0 ? 1.25 : 0.8, x, y); }, { passive: false });
+    let pan = null; const pts = new Map();
+    pane.addEventListener('pointerdown', e => { pts.set(e.pointerId, e); pane.setPointerCapture(e.pointerId); pan = { x: e.clientX, y: e.clientY, vb: vb.slice(), d: 0 }; });
+    pane.addEventListener('pointermove', e => {
+      const [sx, sy] = toSvg(e); probe(sx, sy);
+      if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, e);
+      if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); if (pan.d) { const m = toSvg({ clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 }); zoomAt(pan.d / d, m[0], m[1]); } pan.d = d; return; }
+      if (vb[2] >= vb0[2] - 1e-6 && e.pointerType === 'touch') return;
+      const r = svg.getBoundingClientRect(); vb[0] = pan.vb[0] - (e.clientX - pan.x) / r.width * vb[2]; vb[1] = pan.vb[1] - (e.clientY - pan.y) / r.height * vb[3]; clamp(); apply();
+    });
+    const up = e => { pts.delete(e.pointerId); if (pan) pan.d = 0; }; pane.addEventListener('pointerup', up); pane.addEventListener('pointercancel', up);
+    // probe: exact spline value under the pointer (panels A and C share the phi / z axes)
+    const FR = DATA.frames;
+    function probe(sx, sy) {
+      for (const f of FR) if (sx >= f[0] && sx <= f[0] + f[2] && sy >= f[1] && sy <= f[1] + f[3]) {
+        const ph = (sx - f[0]) / f[2] * 2 * Math.PI, z = (1 - (sy - f[1]) / f[3]) * 100;
+        const was = fitted; LG.setWall(DATA.c, DATA.nphi, DATA.nk);
+        const d = LG.deltaEval(Math.min(ph, 2 * Math.PI - 1e-9), z)[0]; let m = 0; for (let k = 0; k < 48; k++) m += LG.deltaEval(2 * Math.PI * k / 48, z)[0] / 48;
+        if (!was) LG.setWall(ZERO, DATA.nphi, DATA.nk);
+        $('probe').textContent = `φ ${(ph * 180 / Math.PI).toFixed(0)}°  z ${z.toFixed(1)} mm  δ ${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(3)} mm  ${DATA.t.probe_local} ${(d - m) >= 0 ? '+' : '−'}${Math.abs(d - m).toFixed(3)} mm`; return;
+      }
+    }
+  }
+})();
+</script>

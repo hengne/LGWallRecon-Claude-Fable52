@@ -1,0 +1,7 @@
+.ffprofile/
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot

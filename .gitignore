@@ -1,0 +1,8 @@
+.venv/
+out/
+__pycache__/
+*.pyc
+g4/build/
+g4/run/
+deliverable/
+core.*

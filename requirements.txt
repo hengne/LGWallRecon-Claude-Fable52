@@ -1,0 +1,9 @@
+# LGWallRecon -- light-guide inner-wall reconstruction from an entrance-face scan
+# Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+numba>=0.59
+contourpy>=1.2
+pillow>=10
+pyopencl>=2024.1      # optional: GPU tracer (set LG_GPU=0 to run without it)
