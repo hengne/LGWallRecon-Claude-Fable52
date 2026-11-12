@@ -101,6 +101,10 @@ from the exit side, or profilometry.
 
 GitHub (public): <https://github.com/hengne/LGWallRecon-Claude-Fable52> · GitLab (SCNU group): <https://gitlab.cern.ch/SCNU/LGWallRecon-Claude-Fable52>
 
+## License
+
+MIT, see [LICENSE](LICENSE).
+
 ## Citing
 
 Hengne Li, *LGWallRecon: light-guide inner-wall reconstruction from an entrance-face scan* (2026).

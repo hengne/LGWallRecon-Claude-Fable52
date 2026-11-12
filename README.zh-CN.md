@@ -93,6 +93,10 @@ docs/      单文件报告网页与用户手册
 
 GitHub（公开）：<https://github.com/hengne/LGWallRecon-Claude-Fable52> · GitLab（SCNU 组）：<https://gitlab.cern.ch/SCNU/LGWallRecon-Claude-Fable52>
 
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
+
 ## 引用
 
 Hengne Li（李衡讷），*LGWallRecon: light-guide inner-wall reconstruction from an entrance-face scan*（2026）。
