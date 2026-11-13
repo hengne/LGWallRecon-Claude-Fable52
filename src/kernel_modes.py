@@ -58,7 +58,7 @@ if __name__ == '__main__':
     print(f'base: mean T {T0.mean():.4f}; {nk} z-knots x {MMAX + 1} modes, {len(xs)} source points x {NRAY} rays', flush=True)
     for j in range(nk):
         for m in range(MMAX + 1):
-            am = AMP / max(1.0, m / 3.0)
+            am = min(AMP, 0.18 / max(m, 1))               # finite-difference amplitude of this mode [mm]
             D = np.zeros((NPHI, nk)); D[:, j] = am * np.cos(m * phik)
             R = (run(base + D) - run(base - D)) / (2 * am)
             for n, q in enumerate(QS[m]):

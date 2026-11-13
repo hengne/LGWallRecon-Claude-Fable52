@@ -5,7 +5,7 @@ usage: final.py <fitB npz> <tag> [nray]"""
 import sys, numpy as np, matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import lgtrace as lg
-from load_scan import load, spot, aperture_fourier
+from load_scan import load, spot, aperture_fourier, rms
 f = np.load(sys.argv[1]); tag = sys.argv[2]; NRAY = int(sys.argv[3]) if len(sys.argv) > 3 else 20000
 c = f['c']; refl = float(f['refl'])
 e = np.load('../out/edge.npz'); d = load(); SIG = spot(e)
@@ -24,12 +24,12 @@ M = A * T; res = S - M; resid_ideal = S - Aid * Tid
 plat = S[inn].mean()
 mc = A * np.std((T - T2)[inn]) / np.sqrt(2)
 print(f'amplitude A = {A:.5f} V per unit transmission; plateau {plat:.5f} V')
-print(f'interior (r<8.0, {inn.sum()} pts): rms(data-model) = {res[inn].std()/plat*100:.3f} %   rms(data-ideal cone) = {resid_ideal[inn].std()/plat*100:.3f} %   model MC noise {mc/plat*100:.3f} %')
+print(f'interior (r<8.0, {inn.sum()} pts): rms(data-model) = {rms(res[inn])/plat*100:.3f} %   rms(data-ideal cone) = {rms(resid_ideal[inn])/plat*100:.3f} %   model MC noise {mc/plat*100:.3f} %')
 print(f'chi2/N with sigma_data=2.0e-4 (+MC): {np.sum(res[inn]**2)/(2.0e-4**2+mc**2)/inn.sum():.3f}')
 corr = np.corrcoef((S - Aid * Tid)[inn], (M - Aid * Tid)[inn])[0, 1]
 print(f'correlation of non-ideal structure, data vs model: {corr:.3f}')
 allm = R < 8.9
-print(f'whole aperture incl. edge (r<8.9): rms resid {res[allm].std()/plat*100:.3f} %')
+print(f'whole aperture incl. edge (r<8.9): rms resid {rms(res[allm])/plat*100:.3f} %')
 # deformation on a fine grid
 ph = np.linspace(0, 2 * np.pi, 361); zz = np.linspace(0, 100, 201)
 cp = lg.pad_coeffs(c)

@@ -1,0 +1,6 @@
+# LGWallRecon -- light-guide inner-wall reconstruction from an entrance-face scan
+# Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
+# Everything in requirements.txt plus the OpenCL bindings of the GPU tracer (src/lgcl.py).
+# Needs a working OpenCL driver for the GPU (check with `clinfo`).  Without it, run with LG_GPU=0.
+-r requirements.txt
+pyopencl>=2024.1

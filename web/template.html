@@ -7,18 +7,18 @@
 :root {
   --bg: #f4f5f7; --surface: #fcfcfb; --ink: #0e1116; --ink2: #4a4f57; --muted: #868b93; --rule: #dcdfe4;
   --accent: #1c5cab; --accent-ink: #ffffff; --photon: #e39a00; --lost: #8ea6c2; --bench: #10151c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
-  --good: #0a7a0a;
+  --good: #0a7a0a; --bad: #b3261e;
   --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0c0f13; --surface: #161a20; --ink: #eef1f5; --ink2: #b9c0ca; --muted: #7f8792; --rule: #2a3038;
   --accent: #6da7ec; --accent-ink: #0c0f13; --photon: #f2b01e; --lost: #8ea6c2; --bench: #07090c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
-  --good: #3fc13f; color-scheme: dark } }
+  --good: #3fc13f; --bad: #ff7a6b; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0c0f13; --surface: #161a20; --ink: #eef1f5; --ink2: #b9c0ca; --muted: #7f8792; --rule: #2a3038;
   --accent: #6da7ec; --accent-ink: #0c0f13; --photon: #f2b01e; --lost: #8ea6c2; --bench: #07090c; --bench-ink: #e8ecf1; --bench-muted: #8d97a5;
-  --good: #3fc13f; color-scheme: dark }
+  --good: #3fc13f; --bad: #ff7a6b; color-scheme: dark }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.7; }
 .wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 44px; }
 header.top { display: flex; flex-direction: column; gap: 10px; }
@@ -99,6 +99,8 @@ th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var
 th { font-weight: 600; color: var(--muted); font-size: 13px; }
 td.v { font-family: var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
 td .ok { color: var(--good); font-weight: 600; }
+td .bad { color: var(--bad); font-weight: 600; }
+td i { color: var(--muted); }
 .caveats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; }
 .caveats div { display: flex; flex-direction: column; gap: 4px; font-size: 14.5px; color: var(--ink2); border-top: 1px solid var(--rule); padding-top: 12px; min-width: 0; }
 .caveats b { color: var(--ink); }
@@ -179,7 +181,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 <section>
   <h2>{{t:h_method}}</h2>
   <ol class="steps">{{STEPS}}</ol>
-  <div class="prose">{{t:p_method}}</div>
+  <div class="prose">{{P_METHOD}}</div>
 </section>
 
 <section>
@@ -256,7 +258,11 @@ const DATA = {{DATA_JSON}};
   let photons = [], src = { x: DATA.src[0], y: DATA.src[1] }, nEmit = 0, nHit = 0, nDone = 0, playing = !reduce, flash = 0, lastEmit = 0;
   const SPEED = 60, RATE = 30, FADE = 0.8, MAXP = 170;         // mm/s of animation, photons/s
   function emit(now, age) {
-    const r = LG.lambert(src.x, src.y, Math.random(), Math.random()); if (!r) return;
+    // the same source as in the fit: a uniform disc of radius DATA.spot around the chosen point.  Light that
+    // lands outside the aperture is emitted but blocked, and counts as not detected.
+    const sr = DATA.spot * Math.sqrt(Math.random()), sa = 2 * Math.PI * Math.random();
+    const r = LG.lambert(src.x + sr * Math.cos(sa), src.y + sr * Math.sin(sa), Math.random(), Math.random());
+    if (!r) { nEmit++; nDone++; return; }
     const p = r.pts, n = p.length / 3, cum = new Float32Array(n);
     for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + Math.hypot(p[3 * k] - p[3 * k - 3], p[3 * k + 1] - p[3 * k - 2], p[3 * k + 2] - p[3 * k - 1]);
     photons.push({ p, cum, total: cum[n - 1], hit: r.detected, t0: now - (age || 0), done: false });

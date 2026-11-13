@@ -1,6 +1,6 @@
 # LGWallRecon -- light-guide inner-wall reconstruction from an entrance-face scan
 # Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
-"""Load the measured XY scan (scan_summary.csv) into regular grids."""
+"""Load the measured XY scan (scan_summary.csv) into regular grids; small shared helpers."""
 import csv, os
 import numpy as np
 
@@ -20,6 +20,18 @@ def load(path=CSV):
     return out
 
 
+def rms(a):
+    """Root mean square (not the standard deviation: a bias counts)."""
+    a = np.asarray(a, float)
+    return float(np.sqrt(np.mean(a * a)))
+
+
+def wall_sha1(c):
+    """Fingerprint of a set of spline coefficients; ties a check result to the wall it was run on."""
+    import hashlib
+    return hashlib.sha1(np.ascontiguousarray(np.round(np.asarray(c, float), 9)).tobytes()).hexdigest()[:16]
+
+
 def spot(e):
     """Light-spot parameter for lgtrace (`sig`): the edge of the scan prefers a uniform disc
     (radius ~0.34 mm, passed as a negative number) over a Gaussian."""
@@ -31,7 +43,14 @@ def spot(e):
 
 
 def aperture_fourier(e):
-    """Fourier coefficients (cos, sin; m = 0..8) of the measured entrance aperture radius r_ap(phi) [mm]."""
+    """Fourier coefficients (cos, sin; m = 0, 1, ...) of the entrance aperture radius r_ap(phi) [mm]:
+    measured from the edge of the scan (edge.py), or, in a closure test (LG_SYNTH), the aperture of the
+    synthetic wall itself, so that the known truth is consistent with every input of the fit."""
+    syn = os.environ.get('LG_SYNTH')
+    if syn:
+        s = np.load(syn)
+        if 'fourier' in s.files:
+            return s['fourier'].copy()
     F = e['fourier'].copy()
     if 'dr_disc' in e.files:
         F[0, 0] += float(e['dr_disc'])      # small correction of the mean radius from the disc-spot edge fit

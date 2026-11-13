@@ -7,6 +7,7 @@ usage: make_closure_fig.py <synth npz> <final npz of the closure fit> <out dir> 
 """
 import sys, os, json, numpy as np
 import lgtrace as lg, svgkit as sk, i18n
+from load_scan import rms
 from make_figures_style import svg_open, footer
 
 syn = np.load(sys.argv[1]); f = np.load(sys.argv[2]); OUT = sys.argv[3]; L = i18n.load(sys.argv[4])
@@ -19,11 +20,15 @@ cc = lambda a, b: float(np.corrcoef(a.ravel(), b.ravel())[0, 1])
 bands = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 100)]
 sel = lambda b: (z >= b[0]) & (z <= b[1])
 inn = f['R'] < 8.0
-num = dict(corr_all=cc(LT, LR), rms_true=float(LT.std()), rms_rec=float(LR.std()), rms_err=float((LR - LT).std()),
-           bands=[dict(z=b, corr=cc(LT[:, sel(b)], LR[:, sel(b)]), rms_true=float(LT[:, sel(b)].std()),
-                       rms_err=float((LR - LT)[:, sel(b)].std())) for b in bands],
-           prof_rms_err=float((pr - pt).std()), prof_mean_err=float((pr - pt).mean()),
-           map_rms=float((f['S'] - f['M'])[inn].std() / f['S'][inn].mean() * 100))
+# all 'rms' are root mean squares (a bias counts); the local parts have zero azimuthal mean by construction
+num = dict(corr_all=cc(LT, LR), rms_true=rms(LT[:-1]), rms_rec=rms(LR[:-1]), rms_err=rms((LR - LT)[:-1]),
+           bands=[dict(z=b, corr=cc(LT[:, sel(b)], LR[:, sel(b)]), rms_true=rms(LT[:-1][:, sel(b)]),
+                       rms_err=rms((LR - LT)[:-1][:, sel(b)])) for b in bands],
+           prof_rms_err=rms(pr - pt), prof_mean_err=float((pr - pt).mean()), prof_std_err=float((pr - pt).std()),
+           map_rms=rms((f['S'] - f['M'])[inn]) / float(f['S'][inn].mean()) * 100,
+           chi2=float(np.sum((f['S'] - f['M'])[inn] ** 2) / (2.0e-4 ** 2 + float(f['mc']) ** 2) / inn.sum()),
+           seed=int(syn['seed']) if 'seed' in syn.files else -1,
+           base_sha1=str(syn['base_sha1']) if 'base_sha1' in syn.files else '')
 json.dump(num, open(os.path.join(OUT, '..', 'closure_numbers.json'), 'w'), indent=1)
 
 W, H = 1200, 584; ph = np.degrees(phi)

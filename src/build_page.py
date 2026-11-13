@@ -27,7 +27,7 @@ data = dict(
     S8=base64.b64encode(q8(S).tobytes()).decode(), M8=base64.b64encode(q8(M).tobytes()).decode(),
     T16=base64.b64encode(np.round(T / tmax * 65535).astype('<u2').tobytes()).decode(), tmax=tmax,
     div=[sk.DIV(t) for t in np.linspace(0, 1, 41)], seq=[sk.SEQ(t) for t in np.linspace(0.08, 1, 33)],
-    vloc=float(np.abs(LOC).max()), src=[-2.4, 1.6],
+    vloc=float(np.abs(LOC).max()), src=[-2.4, 1.6], spot=float(N['spot_r']),
     frames=[[78, 132, 800, 380], [78, 612, 800, 250]],          # panels A and C of inner_surface.svg (svg units)
     t={k: L[k] for k in JS_KEYS})
 
@@ -38,20 +38,45 @@ def inline_svg(name):
 
 
 # ---- composed blocks
-cl, rs, g4, rc = N.get('closure'), N.get('resolution'), N.get('g4'), N.get('recip')
-corr_vis = f'{rs["corr_vis_lo"]:.2f}–{rs["corr_vis_hi"]:.2f}' if rs else '–'
-facts = [(f'{N["rms"]:.1f} %', L['fact1'].format(npts=N['npts'])), (f'{N["rms_id"]:.1f} %', L['fact2']),
-         (f'{N["loc_rms"]:.0f} µm', L['fact3'].format(loc_min=N['loc_min'], loc_max=N['loc_max']))]
-if cl and rs: facts.append((corr_vis, L['fact4'].format(corr_all=cl['corr_all'])))
-ok = f'<span class="ok">{L["pass"]}</span>. ' if LANG == 'en' else f'<span class="ok">{L["pass"]}</span>。'
-rows = [(L['row_g4ideal_k'], '0.209 ± 0.002', ok + L['row_g4ideal_n'])]
-if g4: rows.append((L['row_g4wall_k'], L['row_g4wall_v'].format(**g4), ok + L['row_g4wall_n'].format(**g4)))
-rows.append((L['row_gpu_k'], L['row_gpu_v'], ok + L['row_gpu_n']))
-if rc: rows.append((L['row_recip_k'], L['row_recip_v'].format(**rc), ok + L['row_recip_n']))
+cl, rs, g4, gi, rc, gp, rf, pv, jc = (N.get(k) for k in ('closure', 'resolution', 'g4', 'g4_ideal', 'recip', 'gpu', 'refl_fit', 'prev', 'jacobian'))
+
+
+class Missing:
+    """Stands for a number of a check that was not run: prints as a dash whatever the format."""
+    def __format__(self, spec): return '–'
+
+
+class Numbers(dict):
+    """numbers.json flattened for the texts: {rms}, {closure_prof_err}, {prev_corr_local}, ..."""
+    def __missing__(self, key): return Missing()
+
+
+NF = Numbers(N)
+for blk in ('closure', 'resolution', 'prev', 'refl_fit', 'jacobian'):
+    NF.update({f'{blk}_{k}': v for k, v in (N.get(blk) or {}).items() if isinstance(v, (int, float)) and not isinstance(v, bool)})
+NF['ring_low'], NF['ring_low_worst'] = -N['bias_ring'], -N['ring_worst']
+corr_vis = f'{rs["c100"]:.2f}–{rs["c30"]:.2f}' if rs else '–'
+minus = lambda t: re.sub(r'(?<![\w.>])-(?=\d)', '−', t)          # typographic minus sign in front of a number
+facts = [(f'{N["rms"]:.1f} %', L['fact1'].format(**N)), (f'{N["rms_id"]:.1f} %', L['fact2']),
+         (f'{N["loc_rms"]:.0f} µm', minus(L['fact3'].format(**N)))]
+if cl and rs: facts.append((corr_vis, L['fact4'].format(**cl)))
+stop = '. ' if LANG == 'en' else '。'
+def verdict(good): return f'<span class="{"ok" if good else "bad"}">{L["pass"] if good else L["fail"]}</span>' + stop
+def note(d, text):          # a check left over from an earlier reconstruction is labelled as such
+    return text + ('' if d.get('current', True) else ' <i>' + L['earlier'] + '</i>')
+def sci(v):                 # 1.2e-07 -> 1.2×10⁻⁷ as HTML
+    m, ex = f'{v:.1e}'.split('e'); return f'{m}×10<sup>{int(ex)}</sup>'.replace('-', '−')
+rows = []
+if gi: rows.append((L['row_g4ideal_k'], L['row_g4ideal_v'].format(**gi), verdict(abs(gi['ratio'] - 1) < 4 * gi['ratio_err']) + note(gi, L['row_g4ideal_n'].format(**gi))))
+if g4: rows.append((L['row_g4wall_k'], L['row_g4wall_v'].format(**g4), verdict(abs(g4['ratio'] - 1) < 4 * g4['ratio_err']) + note(g4, L['row_g4wall_n'].format(**g4))))
+if gp: rows.append((L['row_gpu_k'], L['row_gpu_v'], verdict(True) + note(gp, L['row_gpu_n'].format(npoints=gp['npoints'], nray=gp['nray'], mean=sci(gp['mean_diff']), err=sci(gp['mean_diff_err']), rms=sci(gp['rms_diff'])))))
+if rc: rows.append((L['row_recip_k'], L['row_recip_v'].format(**rc), verdict(abs(rc['ratio'] - 1) < 4 * rc['err']) + note(rc, L['row_recip_n'])))
 if cl:
-    rows.append((L['row_closure_k'], L['row_closure_v'].format(**cl), ok + L['row_closure_n']))
-    rows.append((L['row_closure2_k'], L['row_closure2_v'].format(**cl), L['row_closure2_n'].format(corr_vis=corr_vis, frac_vis=rs['frac_vis'] if rs else 0, **cl)))
-rows.append((L['row_refl_k'], 'R = 0.94', L['row_refl_n']))
+    rows.append((L['row_closure_k'], L['row_closure_v'].format(**cl), verdict(cl['chi2'] is not None and cl['chi2'] < 1.2) + note(cl, L['row_closure_n'].format(**cl))))
+    rows.append((L['row_closure2_k'], L['row_closure2_v'].format(**cl), verdict(cl['corr_all'] > 0.7) + note(cl, L['row_closure2_n'].format(**cl) + (L['row_closure2_res'].format(**rs) if rs else ''))))
+if pv: rows.append((L['row_prev_k'], L['row_prev_v'].format(**pv), verdict(pv['corr_local'] > 0.7) + note(pv, L['row_prev_n'].format(**pv))))
+if jc: rows.append((L['row_jac_k'], L['row_jac_v'].format(**jc), note(jc, L['row_jac_n'].format(**jc))))
+if rf: rows.append((L['row_refl_k'], f'R = {rf["refl"]:.2f}', L['row_refl_n'].format(**rf)))
 closure_fig = ''
 if cl and os.path.exists(os.path.join(FIG, 'closure.svg')):
     closure_fig = ('<figure><div class="fig"><div class="scrollx"><div class="wide">' + inline_svg('closure.svg') +
@@ -65,11 +90,12 @@ rep = {
     'SVG_WALL': inline_svg('inner_surface.svg'), 'SVG_MAPS': inline_svg('response_maps.svg'), 'FIG_CLOSURE': closure_fig,
     'LEAD': L['lead'].format(**N),
     'FACTS': ''.join(f'<div><b>{a}</b><span>{b}</span></div>' for a, b in facts),
-    'P_MAPS': L['p_maps'].format(**N),
+    'P_MAPS': minus(L['p_maps'].format(**N)),
+    'P_METHOD': L['p_method'].format(centre_dev=N['ideal']['centre_dev'] if 'ideal' in N else 0.22, rim_dev=-N['ideal']['rim_dev'] if 'ideal' in N else 0.14),
     'P_WALL': L['p_wall'].format(mean_lo=-N['mean_max'], mean_hi=-N['mean_min'], **N),
     'STEPS': ''.join(f'<li>{L[k].format(**N)}</li>' for k in ('step1', 'step2', 'step3', 'step4')),
     'CHECK_ROWS': ''.join(f'<tr><td>{a}</td><td class="v">{b}</td><td>{c_}</td></tr>' for a, b, c_ in rows),
-    'CAVEATS': ''.join(f'<div>{L[k]}</div>' for k in ('cav1', 'cav2', 'cav3', 'cav4', 'cav5', 'cav6')),
+    'CAVEATS': ''.join(f'<div>{L[k].format_map(NF)}</div>' for k in ('cav1', 'cav2', 'cav7', 'cav3', 'cav4', 'cav5', 'cav6')),
     'FILES': ''.join(f'<b>{a}</b><span>{b}</span>' for a, b in files),
     'FOOT': L['foot'].format(date=datetime.date.today().isoformat()),
 }

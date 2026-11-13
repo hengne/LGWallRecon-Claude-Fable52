@@ -2,7 +2,7 @@
 # Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
 """OpenCL (GPU) version of the light-guide ray tracer in lgtrace.py.
 
-Same geometry, same B-spline wall, same marching + regula-falsi intersection, same quasi-random rays
+Same geometry, same B-spline wall, same wall-zone marching + regula-falsi intersection, same quasi-random rays
 (integer additive recurrence, so CPU and GPU trace the same rays).  Single precision by default
 (the Radeon 8060S is ~12x slower in double); set double=True for a bit-for-bit style cross-check.
 
@@ -18,12 +18,14 @@ _SRC = r"""
 typedef double real;
 #define TOLF ((real)1e-10)
 #define TOLT ((real)1e-10)
+#define TOLG ((real)1e-10)
 #define NUDGE ((real)1e-9)
 #define U01(u) ((real)(u) / (real)4294967296.0)
 #else
 typedef float real;
 #define TOLF ((real)2e-6)
 #define TOLT ((real)2e-6)
+#define TOLG ((real)1e-6)
 #define NUDGE ((real)2e-5)
 #define U01(u) ((real)((u) >> 8) / (real)16777216.0)
 #endif
@@ -32,7 +34,7 @@ typedef float real;
 #define SLOPE ((real)-0.0475)
 #define TWO_PI ((real)6.283185307179586)
 #define BIG ((real)1e30)
-#define STEP ((real)3.0)
+#define STEP ((real)0.5)
 #define MAXB 600
 
 static inline void bas(real u, real *b) {
@@ -81,6 +83,25 @@ static inline real wallf(__global const real *cp, int nphi, int nk, real x, real
     real ph = atan2(y, x); if (ph < 0) ph += TWO_PI;
     return sqrt(x * x + y * y) - (R1 + SLOPE * z + delta_val(cp, nphi, nk, ph, z));
 }
+/* f and df/dt along the ray at parameter t (value and gradient of the spline in one pass) */
+static inline real wallfg(__global const real *cp, int nphi, int nk, real px, real py, real pz,
+                          real dx, real dy, real dz, real t, real *g) {
+    real x = px + t * dx, y = py + t * dy, z = pz + t * dz;
+    real r = sqrt(x * x + y * y);
+    real ph = atan2(y, x); if (ph < 0) ph += TWO_PI;
+    int i, j; real u, v, bu[4], bv[4], du[4], dv[4];
+    cell(nphi, nk - 3, ph, z, &i, &j, &u, &v); bas(u, bu); bas(v, bv); dbas(u, du); dbas(v, dv);
+    real val = 0, a = 0, b = 0;
+    for (int k = 0; k < 4; k++) {
+        int o = (i + k) * nk + j;
+        real rv = cp[o] * bv[0] + cp[o + 1] * bv[1] + cp[o + 2] * bv[2] + cp[o + 3] * bv[3];
+        real sv = cp[o] * dv[0] + cp[o + 1] * dv[1] + cp[o + 2] * dv[2] + cp[o + 3] * dv[3];
+        val += bu[k] * rv; a += du[k] * rv; b += bu[k] * sv;
+    }
+    real dph = a * (real)nphi / TWO_PI, ddz = b * (real)(nk - 3) / LEN;
+    *g = (x * dx + y * dy) / r - SLOPE * dz - dph * (x * dy - y * dx) / (r * r) - ddz * dz;
+    return r - (R1 + SLOPE * z + val);
+}
 static real cone_exit(real px, real py, real pz, real dx, real dy, real dz, real off) {
     real a0 = R1 + off + SLOPE * pz;
     real A = dx * dx + dy * dy - SLOPE * SLOPE * dz * dz;
@@ -106,22 +127,54 @@ static real trace_ray(__global const real *cp, int nphi, int nk, real dlo, real 
     real w = 1; real tend = 0;
     for (int nb = 0; nb < MAXB; nb++) {
         tend = dz > 0 ? (LEN - pz) / dz : (dz < 0 ? -pz / dz : BIG);
-        real r = sqrt(px * px + py * py);
-        real tlo = 0;
-        if (r < R1 + SLOPE * pz + dlo) tlo = cone_exit(px, py, pz, dx, dy, dz, dlo);
-        if (tlo >= tend) return dz > 0 ? w : -w;
+        /* wall zone between the bounding cones: only there can the ray hit the wall (see lgtrace.py) */
         real thi = cone_exit(px, py, pz, dx, dy, dz, dhi);
         if (thi > tend) thi = tend;
-        int n = (int)((thi - tlo) / STEP) + 1;
-        real h = (thi - tlo) / (real)n;
-        real ta = tlo, fa = wallf(cp, nphi, nk, px + ta * dx, py + ta * dy, pz + ta * dz);
-        if (fa > 0) fa = (real)-1e-7;
-        real tb = ta, fb = fa; int found = 0;
-        for (int k = 0; k < n; k++) {
-            tb = tlo + (real)(k + 1) * h;
-            fb = wallf(cp, nphi, nk, px + tb * dx, py + tb * dy, pz + tb * dz);
-            if (fb >= 0) { found = 1; break; }
-            ta = tb; fa = fb;
+        real a0 = R1 + dlo + SLOPE * pz;
+        real A = dx * dx + dy * dy - SLOPE * SLOPE * dz * dz;
+        real B = px * dx + py * dy - SLOPE * a0 * dz;
+        real C = px * px + py * py - a0 * a0;
+        real s0 = 0, e0 = thi, s1 = 0, e1 = -1;
+        real disc = B * B - A * C;
+        if (fabs(A) < (real)1e-12) {
+            if (fabs(B) > (real)1e-30) { real tr = (real)-0.5 * C / B; if (B < 0) e0 = fmin(thi, tr); else s0 = fmax((real)0, tr); }
+            else if (C < 0) e0 = -1;
+        } else if (disc <= 0) {
+            if (A < 0) e0 = -1;
+        } else {
+            real sq = sqrt(disc);
+            real q = -(B + (B >= 0 ? sq : -sq));
+            real ra = q / A, rb = (q != 0) ? C / q : ra;
+            if (ra > rb) { real tmp = ra; ra = rb; rb = tmp; }
+            if (A > 0) { if (rb > 0 && ra < thi) { e0 = ra; s1 = rb; e1 = thi; } }
+            else { s0 = fmax((real)0, ra); e0 = fmin(thi, rb); }
+        }
+        real ta = 0, fa = 0, tb = 0, fb = 0; int found = 0;
+        for (int seg = 0; seg < 2 && !found; seg++) {
+            real sa = seg == 0 ? s0 : s1, sb = seg == 0 ? e0 : e1;
+            if (sb <= sa) continue;
+            int n = (int)((sb - sa) / STEP) + 1;
+            real h = (sb - sa) / (real)n, ga, gb;
+            ta = sa; fa = wallfg(cp, nphi, nk, px, py, pz, dx, dy, dz, ta, &ga);
+            if (fa > 0) fa = (real)-1e-7;
+            for (int k = 0; k < n; k++) {
+                tb = sa + (real)(k + 1) * h;
+                fb = wallfg(cp, nphi, nk, px, py, pz, dx, dy, dz, tb, &gb);
+                if (fb >= 0) { found = 1; break; }
+                if (ga > 0 && gb < 0) {          /* maximum of f between the samples: a grazing hit? */
+                    real tl = ta, gl = ga, tr = tb, gr = gb; int sd = 0;
+                    for (int it = 0; it < 30; it++) {
+                        real tm = (tl * gr - tr * gl) / (gr - gl), gm;
+                        real fm = wallfg(cp, nphi, nk, px, py, pz, dx, dy, dz, tm, &gm);
+                        if (fm >= 0) { tb = tm; fb = fm; found = 1; break; }
+                        if (fabs(gm) < TOLG || (tr - tl) < TOLT) break;
+                        if (gm > 0) { tl = tm; gl = gm; if (sd == 1) gr *= (real)0.5; sd = 1; }
+                        else { tr = tm; gr = gm; if (sd == -1) gl *= (real)0.5; sd = -1; }
+                    }
+                    if (found) break;
+                }
+                ta = tb; fa = fb; ga = gb;
+            }
         }
         if (!found) return dz > 0 ? w : -w;
         real t = tb; int side = 0;
@@ -133,7 +186,7 @@ static real trace_ray(__global const real *cp, int nphi, int nk, real dlo, real 
             else { ta = t; fa = ft; if (side == -1) fb *= (real)0.5; side = -1; }
         }
         px += t * dx; py += t * dy; pz += t * dz;
-        r = sqrt(px * px + py * py);
+        real r = sqrt(px * px + py * py);
         real ex = px / r, ey = py / r;
         real ph = atan2(py, px); if (ph < 0) ph += TWO_PI;
         real dph, ddz; delta_grad(cp, nphi, nk, ph, pz, &dph, &ddz);
@@ -149,12 +202,13 @@ static real trace_ray(__global const real *cp, int nphi, int nk, real dlo, real 
     }
     return 0;
 }
-#define A1 3518319155u   /* round(2^32 / g^1), g = 1.2207440846057596 (R4 additive recurrence) */
-#define A2 2882110345u
-#define A3 2360945575u
-#define A4 1934021721u
-#define A5 1584297434u
-#define A6 1297812911u
+/* additive-recurrence constants, the same as _QA in lgtrace.py (R_4 sequence, g = 1.1673039782614187) */
+#define A1 3679390609u
+#define A2 3152041523u
+#define A3 2700274807u
+#define A4 2313257605u
+#define A5 1779033703u
+#define A6 3144134277u
 __kernel void trace_map(__global const real *cp, int nphi, int nk, real dlo, real dhi,
                         __global const float *xy, __global const uint *sh,
                         int nchunk, int rch, real smax, real spot, real blur, real refl, int pt0,

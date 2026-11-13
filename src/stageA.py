@@ -2,7 +2,11 @@
 # Author: Hengne Li (李衡讷) <Hengne.Li@cern.ch>, <Hengne.Li@m.scnu.edu.cn>
 """Stage A: axisymmetric part.  Fit the m = 0 wall profile delta0(z) (and optionally the mirror reflectivity)
 to the azimuthally averaged radial response profile.  Gauss-Newton / LM with finite differences and
-common random numbers."""
+common random numbers.
+
+usage: [LG_TAG=<tag>] [LG_START=<A_*.npz>] python stageA.py [NZ] [fix|refl] [LAM2]
+LG_START starts from the profile of an earlier fit (reflectivity 1), so that a fit with the reflectivity
+free can be compared directly with the perfect-mirror fit it started from."""
 import sys, os, time, numpy as np, matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import lgtrace as lg
@@ -46,12 +50,15 @@ def resid(p, T):
 npar = nk + (1 if FIT_REFL else 0)
 p = np.full(npar, REDGE - lg.R1); 
 if FIT_REFL: p[nk] = 0.95
+if os.environ.get('LG_START'):          # continue from an earlier fit; the mirror starts perfect
+    p0 = np.load(os.environ['LG_START'])['p']; p[:nk] = p0[:nk]
+    if FIT_REFL: p[nk] = 1.0
 T = model(p); r, A = resid(p, T); chi = r @ r; mu = 1e-2
 print(f'{tag}: start chi2 {chi:.1f}  (data part {np.sum(r[:len(rho)]**2):.1f} / {len(rho)} pts)', flush=True)
 for it in range(25):
     J = np.zeros((len(r), npar))
     for k in range(npar):
-        h = 0.01 if k >= nk else 0.04
+        h = -0.01 if k >= nk else 0.04              # reflectivity: backward difference, it is capped at 1
         q = p.copy(); q[k] += h
         J[:, k] = (resid(q, model(q))[0] - r) / h
     improved = False

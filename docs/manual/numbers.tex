@@ -2,48 +2,96 @@
 \providecommand{\UrlPending}{to be added}
 \newcommand{\Npts}{5029}
 \newcommand{\RmsFit}{0.9}
-\newcommand{\RmsFitTwo}{0.94}
+\newcommand{\RmsFitTwo}{0.90}
+\newcommand{\BiasFit}{\ensuremath{+}0.00}
 \newcommand{\RmsIdeal}{5.4}
-\newcommand{\ChiTwo}{1.31}
-\newcommand{\CorrStruct}{0.98}
-\newcommand{\RmsRing}{5}
+\newcommand{\ChiTwo}{1.27}
+\newcommand{\CorrStruct}{0.99}
+\newcommand{\RmsRing}{3}
+\newcommand{\BiasRing}{\ensuremath{-}1.8}
+\newcommand{\RingWorst}{\ensuremath{-}3.6}
+\newcommand{\NoisePct}{0.8}
+\newcommand{\McNoise}{0.07}
 \newcommand{\LocRms}{13}
-\newcommand{\LocMin}{\ensuremath{-}49}
-\newcommand{\LocMax}{\ensuremath{+}72}
-\newcommand{\MeanMin}{\ensuremath{-}0.95}
-\newcommand{\MeanMax}{\ensuremath{-}0.25}
+\newcommand{\LocRmsOne}{12.9}
+\newcommand{\LocMin}{\ensuremath{-}61}
+\newcommand{\LocMax}{\ensuremath{+}79}
+\newcommand{\MeanMin}{\ensuremath{-}0.89}
+\newcommand{\MeanMax}{\ensuremath{-}0.07}
 \newcommand{\RAp}{8.47}
 \newcommand{\RApDiff}{0.28}
 \newcommand{\SpotR}{0.34}
-\newcommand{\Amplitude}{0.1320}
+\newcommand{\Amplitude}{0.1704}
 \newcommand{\Plateau}{0.0252}
-\newcommand{\GfourRatio}{1.0019}
-\newcommand{\GfourRatioErr}{0.0011}
+\newcommand{\IdealCentreDev}{\ensuremath{+}0.23}
+\newcommand{\IdealRimDev}{\ensuremath{-}0.13}
+\newcommand{\GfourIdealT}{0.2094}
+\newcommand{\GfourIdealTErr}{0.0002}
+\newcommand{\GfourIdealRatio}{1.0012}
+\newcommand{\GfourIdealRatioErr}{0.0011}
+\newcommand{\GfourIdealNpoints}{30}
+\newcommand{\GfourIdealNphot}{40000}
+\newcommand{\GfourRatio}{1.0007}
+\newcommand{\GfourRatioErr}{0.0015}
 \newcommand{\GfourNpoints}{120}
 \newcommand{\GfourNphot}{4000}
-\newcommand{\GfourPull}{1.08}
-\newcommand{\GfourCorr}{0.97}
+\newcommand{\GfourPull}{1.00}
+\newcommand{\GfourCorr}{0.96}
+\newcommand{\GpuNpoints}{503}
+\newcommand{\GpuNray}{8000}
+\newcommand{\GpuMeanDiff}{\ensuremath{-2.0\times10^{-6}}}
+\newcommand{\GpuMeanDiffErr}{\ensuremath{2.8\times10^{-6}}}
+\newcommand{\GpuRmsDiff}{\ensuremath{6.2\times10^{-5}}}
 \newcommand{\RecipRatio}{1.003}
-\newcommand{\RecipErr}{0.008}
-\newcommand{\ClCorrAll}{0.09}
+\newcommand{\RecipErr}{0.009}
+\newcommand{\JacCorrMin}{0.84}
+\newcommand{\JacCorrMax}{0.99}
+\newcommand{\JacSlopeMin}{0.74}
+\newcommand{\JacSlopeMax}{1.03}
+\newcommand{\JacStepCorrMin}{0.13}
+\newcommand{\JacStepCorrMax}{0.27}
+\newcommand{\JacBumpCorrMin}{0.44}
+\newcommand{\JacBumpCorrMax}{0.50}
+\newcommand{\ReflFit}{0.96}
+\newcommand{\ReflChi}{27}
+\newcommand{\ReflChiFixed}{34}
+\newcommand{\ReflNpts}{40}
+\newcommand{\PrevRmsEarlier}{0.92}
+\newcommand{\PrevRmsNow}{0.90}
+\newcommand{\PrevMapDiff}{0.28}
+\newcommand{\PrevCorr}{0.15}
+\newcommand{\PrevCorrEntrance}{0.80}
+\newcommand{\PrevCorrRest}{\ensuremath{+}0.02, \ensuremath{-}0.49, \ensuremath{-}0.19, \ensuremath{-}0.26}
+\newcommand{\PrevLocRms}{13.5}
+\newcommand{\PrevLocDiff}{17}
+\newcommand{\PrevProfDiff}{225}
+\newcommand{\PrevProfDiffMax}{516}
+\newcommand{\ClCorrAll}{0.18}
 \newcommand{\ClRmsTrue}{48}
-\newcommand{\ClRmsRec}{11}
-\newcommand{\ClMapRms}{0.80}
-\newcommand{\ClProfErr}{210}
-\newcommand{\ResCorrLo}{0.72}
-\newcommand{\ResCorrHi}{0.97}
-\newcommand{\ResFracVis}{5}
-\newcommand{\ResAminLo}{2}
-\newcommand{\ResAminHi}{11}
+\newcommand{\ClRmsRec}{7}
+\newcommand{\ClRmsErr}{47}
+\newcommand{\ClMapRms}{0.78}
+\newcommand{\ClChiTwo}{0.95}
+\newcommand{\ClProfErr}{172}
+\newcommand{\ClProfBias}{\ensuremath{+}104}
+\newcommand{\ResCThirty}{0.97}
+\newcommand{\ResCHundred}{0.91}
+\newcommand{\ResCOneFifty}{0.70}
+\newcommand{\ResFThirty}{1.4}
+\newcommand{\ResFHundred}{1.7}
+\newcommand{\ResFOneFifty}{4.0}
+\newcommand{\ResAHundred}{0.90}
+\newcommand{\ResSThirty}{0.033}
+\newcommand{\ResSHundred}{0.027}
 \newcommand{\ResolutionRows}{%
-  10 & 1.1 & 0.2 & \ensuremath{+}0.82 \\
-  30 & 1.8 & 2.4 & \ensuremath{+}0.97 \\
-  60 & 3.3 & 2.7 & \ensuremath{+}0.95 \\
-  100 & 6.5 & 5.4 & \ensuremath{+}0.72 \\
-  150 & 11.3 & 9.3 & \ensuremath{+}0.57 \\
-  200 & 18.1 & 11.1 & \ensuremath{+}0.49 \\
-  300 & 39.2 & 15.7 & \ensuremath{+}0.32 \\
-  500 & 93.2 & 19.8 & \ensuremath{+}0.25 \\
+  10 & 0.021 & 0.2 & \ensuremath{+}0.94 & 1.07 \\
+  30 & 0.033 & 1.4 & \ensuremath{+}0.97 & 0.92 \\
+  60 & 0.031 & 1.6 & \ensuremath{+}0.95 & 0.90 \\
+  100 & 0.027 & 1.7 & \ensuremath{+}0.91 & 0.90 \\
+  150 & 0.039 & 4.0 & \ensuremath{+}0.70 & 0.67 \\
+  200 & 0.22 & 7.6 & \ensuremath{+}0.49 & 0.54 \\
+  300 & 0.88 & 13.1 & \ensuremath{+}0.28 & 0.49 \\
+  500 & 1.03 & 28.3 & \ensuremath{+}0.18 & 0.37 \\
 }
 \newcommand{\GithubURL}{\url{https://github.com/hengne/LGWallRecon-Claude-Fable52}}
 \newcommand{\GitlabURL}{\url{https://gitlab.cern.ch/SCNU/LGWallRecon-Claude-Fable52}}

@@ -28,6 +28,7 @@ R1, R2, L = 8.75, 4.0, 100.0
 SPOT_BLUR = 0.0      # Gaussian softening (mm) of the disc-shaped light spot; set from the edge fit by load_scan.spot()
 USE_GPU = os.environ.get('LG_GPU', '0') == '1'      # run the wall tracer on the GPU (OpenCL, see lgcl.py)
 SLOPE = (R2 - R1) / L
+STEP = 0.5            # march step (mm) inside the wall zone; see trace_ray
 TWO_PI = 2.0 * math.pi
 
 
@@ -103,6 +104,18 @@ def _f(cp, flat, x, y, z):
 
 
 @njit(cache=True, fastmath=True, inline='always')
+def _fg(cp, px, py, pz, dx, dy, dz, t):
+    """f and df/dt along the ray at parameter t (deformed wall)."""
+    x = px + t * dx; y = py + t * dy; z = pz + t * dz
+    r = math.sqrt(x * x + y * y)
+    ph = math.atan2(y, x)
+    if ph < 0.0:
+        ph += TWO_PI
+    d, dph, ddz = delta_eval(cp, ph, z)
+    return r - (R1 + SLOPE * z + d), (x * dx + y * dy) / r - SLOPE * dz - dph * (x * dy - y * dx) / (r * r) - ddz * dz
+
+
+@njit(cache=True, fastmath=True, inline='always')
 def _cone_exit(px, py, pz, dx, dy, dz, off):
     """smallest t > 0 where the ray crosses the cone r = R1 + off + SLOPE z (on the physical nappe)."""
     a0 = R1 + off + SLOPE * pz
@@ -136,7 +149,6 @@ def trace_ray(cp, flat, dlo, dhi, px, py, pz, dx, dy, dz, refl, maxb, hit):
     hit[0..2] <- exit position/‑ unused unless detected; hit[3] <- number of bounces."""
     w = 1.0
     nb = 0
-    STEP = 3.0
     while True:
         # distance to the end planes
         if dz > 0.0:
@@ -151,32 +163,91 @@ def trace_ray(cp, flat, dlo, dhi, px, py, pz, dx, dy, dz, refl, maxb, hit):
                 break
             t = th
         else:
-            # bracket: the wall lies between the cones offset by dlo and dhi (bounds of delta)
-            r = math.sqrt(px * px + py * py)
-            tlo = 0.0
-            if r < R1 + SLOPE * pz + dlo:
-                tlo = _cone_exit(px, py, pz, dx, dy, dz, dlo)
-            if tlo >= tend:
-                break
+            # The wall lies between two bounding cones, offset by dlo and dhi (bounds of delta) from the
+            # nominal one.  Only the part of the ray inside this thin 'wall zone' can hit the wall, so only
+            # that part is marched, with a fine step.  Inside the inner cone  q(t) = A t^2 + 2 B t + C < 0.
             thi = _cone_exit(px, py, pz, dx, dy, dz, dhi)
             if thi > tend:
                 thi = tend
-            # march to the first sign change of f
-            n = int((thi - tlo) / STEP) + 1
-            h = (thi - tlo) / n
-            ta = tlo
-            fa = _f(cp, flat, px + ta * dx, py + ta * dy, pz + ta * dz)
-            if fa > 0.0:        # started (numerically) outside: treat start as on the wall
-                fa = -1e-12
+            a0 = R1 + dlo + SLOPE * pz
+            A = dx * dx + dy * dy - SLOPE * SLOPE * dz * dz
+            B = px * dx + py * dy - SLOPE * a0 * dz
+            C = px * px + py * py - a0 * a0
+            s0 = 0.0; e0 = thi          # first zone interval
+            s1 = 0.0; e1 = -1.0         # second zone interval (empty unless the ray dips into the inner cone)
+            disc = B * B - A * C
+            if abs(A) < 1e-14:
+                if abs(B) > 1e-300:
+                    tr = -0.5 * C / B
+                    if B < 0.0:
+                        e0 = min(thi, tr)       # inside the inner cone for t > tr
+                    else:
+                        s0 = max(0.0, tr)       # inside for t < tr
+                elif C < 0.0:
+                    e0 = -1.0
+            elif disc <= 0.0:
+                if A < 0.0:
+                    e0 = -1.0                   # the whole ray is inside the inner cone
+            else:
+                sq = math.sqrt(disc)
+                q = -(B + (sq if B >= 0.0 else -sq))
+                ra = q / A
+                rb = C / q if q != 0.0 else ra
+                if ra > rb:
+                    ra, rb = rb, ra
+                if A > 0.0:                     # inside the inner cone between the two roots
+                    if rb > 0.0 and ra < thi:
+                        e0 = ra; s1 = rb; e1 = thi
+                else:                           # inside the inner cone outside the two roots
+                    s0 = max(0.0, ra); e0 = min(thi, rb)
+            # march each zone interval to the first sign change of f.  The derivative of f along the ray is
+            # sampled as well: if it changes from rising to falling between two samples, f has a maximum in
+            # between, which is located and tested, so a grazing hit (in and out again within one step)
+            # is not skipped.
             found = False
-            tb = ta; fb = fa
-            for k in range(n):
-                tb = tlo + (k + 1) * h
-                fb = _f(cp, flat, px + tb * dx, py + tb * dy, pz + tb * dz)
-                if fb >= 0.0:
-                    found = True
+            ta = 0.0; fa = 0.0; tb = 0.0; fb = 0.0
+            for seg in range(2):
+                sa = s0 if seg == 0 else s1
+                sb = e0 if seg == 0 else e1
+                if sb <= sa:
+                    continue
+                n = int((sb - sa) / STEP) + 1
+                h = (sb - sa) / n
+                ta = sa
+                fa, ga = _fg(cp, px, py, pz, dx, dy, dz, ta)
+                if fa > 0.0:        # started (numerically) outside: treat start as on the wall
+                    fa = -1e-12
+                for k in range(n):
+                    tb = sa + (k + 1) * h
+                    fb, gb = _fg(cp, px, py, pz, dx, dy, dz, tb)
+                    if fb >= 0.0:
+                        found = True
+                        break
+                    if ga > 0.0 and gb < 0.0:
+                        tl = ta; gl = ga; tr = tb; gr = gb; side = 0
+                        for it in range(40):
+                            tm = (tl * gr - tr * gl) / (gr - gl)
+                            fm, gm = _fg(cp, px, py, pz, dx, dy, dz, tm)
+                            if fm >= 0.0:
+                                tb = tm; fb = fm; found = True
+                                break
+                            if abs(gm) < 1e-10 or (tr - tl) < 1e-10:
+                                break
+                            if gm > 0.0:
+                                tl = tm; gl = gm
+                                if side == 1:
+                                    gr *= 0.5
+                                side = 1
+                            else:
+                                tr = tm; gr = gm
+                                if side == -1:
+                                    gl *= 0.5
+                                side = -1
+                        if found:
+                            break
+                    ta = tb; fa = fb; ga = gb
+                if found:
                     break
-                ta = tb; fa = fb
             if not found:
                 break                      # reached an end plane while still inside
             # Illinois regula falsi on [ta, tb]
@@ -231,9 +302,13 @@ def trace_ray(cp, flat, dlo, dhi, px, py, pz, dx, dy, dz, refl, maxb, hit):
     return -w             # went back out through the entrance plane z = 0
 
 
-# additive-recurrence (R_4) quasi random numbers in 32-bit integer arithmetic (identical on CPU and GPU):
-#   u_j(k) = frac(shift_j + k * g^-j),  g = 1.2207440846...,  stored as multiples of 2^-32
-_QA = np.array([3518319155, 2882110345, 2360945575, 1934021721, 1584297434, 1297812911], dtype=np.uint64)
+# Quasi-random rays: additive recurrence in 32-bit integer arithmetic (identical on CPU and GPU),
+#   u_j(k) = frac(shift_j + k * alpha_j),  stored as multiples of 2^-32.
+# alpha_1..4 = g^-1..g^-4 with g = 1.1673039782614187, the real root of x^5 = x + 1 (the R_4 sequence:
+# 1, alpha_1..alpha_4 are linearly independent over the rationals, so the four coordinates fill the unit
+# 4-cube uniformly).  alpha_5, alpha_6 = sqrt(2) - 1, sqrt(3) - 1 serve the optional spot blur.
+# test_sampler.py checks the uniformity of every pair of coordinates.
+_QA = np.array([3679390609, 3152041523, 2700274807, 2313257605, 1779033703, 3144134277], dtype=np.uint64)
 _M32 = np.uint64(0xFFFFFFFF)
 
 
@@ -315,7 +390,10 @@ def transmission(xs, ys, coeffs=None, nray=4000, smax=1.0, sig=0.0, gap=0.0, ref
     else:
         cp = pad_coeffs(coeffs); flat = False
         dlo, dhi = delta_bounds(cp)
-    if USE_GPU and not flat and not back and gap == 0.0 and lamb_n == 1.0 and gpu is not False or gpu is True:
+    gpu_ok = not flat and not back and gap == 0.0 and lamb_n == 1.0     # what the OpenCL tracer implements
+    if gpu is True and not gpu_ok:
+        raise ValueError('the GPU tracer handles only a deformed wall, forward rays, gap = 0 and a Lambertian source')
+    if gpu is True or (gpu is None and USE_GPU and gpu_ok):
         import lgcl
         return lgcl.transmission(xs, ys, cp, dlo, dhi, nray, smax, sig, refl, seed, blur=blur)
     from lgcl import shifts

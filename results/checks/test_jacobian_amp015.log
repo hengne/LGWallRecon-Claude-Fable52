@@ -1,0 +1,16 @@
+axisymmetric base: MC noise of a 200k-ray map (two seeds) 2.55e-05
+  smooth x2 rms 0.01 mm: exact dT rms 0.00088  linear 0.00086  corr 0.991  slope 1.011
+  smooth x2 rms 0.03 mm: exact dT rms 0.00406  linear 0.00423  corr 0.965  slope 0.927
+  smooth x2 rms 0.06 mm: exact dT rms 0.00513  linear 0.00607  corr 0.910  slope 0.768
+  smooth x6 rms 0.03 mm: exact dT rms 0.00346  linear 0.00344  corr 0.997  slope 1.002
+  smooth x6 rms 0.10 mm: exact dT rms 0.00781  linear 0.00807  corr 0.973  slope 0.941
+  m=0 step +0.05 mm for z > 50: exact dT mean +0.00454 rms 0.00092  linear mean +0.00456 rms 0.00066  corr 0.480  slope 0.989
+  m=0 bump 0.03 mm, sigma 10 mm: exact dT mean +0.00001 rms 0.00022  linear mean +0.00002 rms 0.00026  corr 0.796  slope 0.655
+current fit: MC noise of a 200k-ray map (two seeds) 4.08e-05
+  smooth x2 rms 0.01 mm: exact dT rms 0.00148  linear 0.00141  corr 0.964  slope 1.011
+  smooth x2 rms 0.03 mm: exact dT rms 0.00235  linear 0.00236  corr 0.899  slope 0.897
+  smooth x2 rms 0.06 mm: exact dT rms 0.00688  linear 0.00769  corr 0.857  slope 0.768
+  smooth x6 rms 0.03 mm: exact dT rms 0.00345  linear 0.00365  corr 0.955  slope 0.904
+  smooth x6 rms 0.10 mm: exact dT rms 0.01375  linear 0.01418  corr 0.951  slope 0.922
+  m=0 step +0.05 mm for z > 50: exact dT mean +0.00451 rms 0.00100  linear mean +0.00456 rms 0.00066  corr 0.255  slope 0.976
+  m=0 bump 0.03 mm, sigma 10 mm: exact dT mean +0.00001 rms 0.00025  linear mean +0.00002 rms 0.00026  corr 0.660  slope 0.619

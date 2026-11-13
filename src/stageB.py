@@ -5,7 +5,11 @@
 Damped (Levenberg-Marquardt) regularised least squares.  The Jacobian comes from the Fourier-mode linear
 response computed around an axisymmetric base wall (kernel_modes.py); every trial step is evaluated with
 a full ray trace of all fitted scan points, and the Jacobian is corrected with what the step actually did
-(Broyden update).  The iteration stops when no damped step lowers the objective any more.
+(Broyden update).  The iteration stops when eight successively more damped trial steps all fail to lower
+the objective.  That is a practical stopping rule, not a proof of a minimum: the result is one regularised
+solution that depends on the starting wall, the regularisation weights and the approximate Jacobian.
+The objective is  chi2(data) + LAM^2 |differences of neighbouring coefficients|^2
+                 + (RIDGE LAM)^2 |c - base|^2 + (aperture constraint)^2.
 
 usage: stageB.py <kernel tag> <out tag> [lam = 1.0] [niter = 8] [start npz]
        reads  ../out/kmodes_<kernel tag>.npz, ../out/edge.npz, the scan (or LG_SYNTH)
@@ -15,7 +19,7 @@ environment: LG_RCUT (fit radius, 8.0 mm), LG_NRAY (rays per point, 20000), LG_M
 """
 import sys, os, time, numpy as np
 import lgtrace as lg
-from load_scan import load, spot, aperture_fourier
+from load_scan import load, spot, aperture_fourier, rms
 
 ktag, tag = sys.argv[1], sys.argv[2]
 LAM = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
@@ -49,12 +53,12 @@ for i in range(NPHI):
         add([(idx[(i + 1) % NPHI, j], 1), (idx[i, j], -1)])                       # d/dphi
         if j + 1 < nk: add([(idx[i, j + 1], 1), (idx[i, j], -1)])                   # d/dz
 P = np.array(rows)
-# edge constraint: delta(phi_i, z=0) = measured aperture radius - R1
+# edge constraint: delta(phi_i, z=0) = aperture radius - R1  (measured; in a closure test, that of the synthetic wall)
 E = np.zeros((NPHI, NPHI * nk)); etar = np.zeros(NPHI)
 F = aperture_fourier(e)
 for i in range(NPHI):
     ph = i * hphi
-    etar[i] = sum(F[mm, 0] * np.cos(mm * ph) + F[mm, 1] * np.sin(mm * ph) for mm in range(9)) - lg.R1
+    etar[i] = sum(F[mm, 0] * np.cos(mm * ph) + F[mm, 1] * np.sin(mm * ph) for mm in range(len(F))) - lg.R1
     for k, w in zip((-1, 0, 1), (1 / 6, 4 / 6, 1 / 6)):
         for j, v in zip((0, 1, 2), (1 / 6, 4 / 6, 1 / 6)):
             E[i, idx[(i + k) % NPHI, j]] += w * v
@@ -82,8 +86,8 @@ for it in range(NITER + 1):
     res = (dat - A * T)
     chi = np.sum(res ** 2) / sig ** 2 / N
     rough = np.sum((P @ c.ravel()) ** 2)
-    print(f'it {it}: chi2/N {chi:.3f}  rms resid {res.std()/dat.mean()*100:.3f} %  A {A:.5f}  |delta-base| rms {np.std(c-base):.3f} max {np.abs(c-base).max():.3f}  rough {rough:.3f}', flush=True)
-    hist.append([chi, res.std(), A])
+    print(f'it {it}: chi2/N {chi:.3f}  rms resid {rms(res)/dat.mean()*100:.3f} %  A {A:.5f}  |delta-base| rms {np.std(c-base):.3f} max {np.abs(c-base).max():.3f}  rough {rough:.3f}', flush=True)
+    hist.append([chi, rms(res), A])
     np.savez(f'../out/fitB_{tag}.npz', c=c, base=base, A=A, hist=np.array(hist), NPHI=NPHI, NZ=NZ, refl=refl, lam=LAM, T=T, xs=xs, ys=ys, dat=dat)
     if it == NITER: break
     # linear system for the update D (and relative amplitude change a):  A (T + J D)(1 + a) ~ dat

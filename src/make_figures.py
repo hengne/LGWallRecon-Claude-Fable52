@@ -138,7 +138,7 @@ s.append(f'<text class="h2" x="{fr.x0}" y="500">{L["f2_ring"].format(r=r0)}</tex
 s.append(sk.axes(fr, range(0, 361, 90), np.linspace(lo, hi, 4), L['ax_phi'], '', yfmt='{:.4f}', grid=True))
 s.append('<path class="line2" d="M' + 'L'.join(f'{float(fr.X(a)):.2f},{float(fr.Y(b)):.2f}' for a, b in zip(ab, cm)) + '"/>')
 s.append(''.join(f'<circle class="dot" cx="{float(fr.X(a)):.2f}" cy="{float(fr.Y(b)):.2f}" r="2.4"/>' for a, b in zip(ab, cd)))
-s.append(footer(L['f2_foot'].format(rms=res[R < 8.0].std()), 40, H - 16))
+s.append(footer(L["f2_foot"].format(rms=float(np.sqrt(np.mean(res[R < 8.0] ** 2)))), 40, H - 16))
 s.append('</svg>')
 open(os.path.join(OUT, 'response_maps.svg'), 'w', encoding='utf-8').write('\n'.join(s))
 for n in ('inner_surface.svg', 'response_maps.svg'):
