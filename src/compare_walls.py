@@ -6,10 +6,11 @@ Two walls that both reproduce the scan but differ from each other show directly,
 how much of the wall the scan leaves open.  The earlier wall is traced with the present tracer, aperture
 and light spot, so the two are compared on equal terms.
 
-usage: compare_walls.py <final npz> <earlier wall_coeffs json> [nray]      (writes ../out/compare_prev.json)"""
+usage: compare_walls.py <final npz> <earlier wall_coeffs json> [nray] [output json]      (default output ../out/compare_prev.json)"""
 import sys, json, numpy as np, lgtrace as lg
 from load_scan import spot, rms, wall_sha1
 f = np.load(sys.argv[1]); old = json.load(open(sys.argv[2])); NRAY = int(sys.argv[3]) if len(sys.argv) > 3 else 20000
+OUT = sys.argv[4] if len(sys.argv) > 4 else '../out/compare_prev.json'
 c0 = np.array(old['c'], dtype=float); c1 = f['c']
 if c0.shape != c1.shape: sys.exit(f'compare_walls: spline grids differ, {c0.shape} against {c1.shape}')
 e = np.load('../out/edge.npz'); SIG = spot(e)
@@ -32,5 +33,5 @@ out = dict(
     loc_rms_earlier=rms(L0) * 1000, loc_rms_now=rms(L1) * 1000, loc_diff=rms(L0 - L1) * 1000,     # [um]
     prof_diff=rms(p0 - p1) * 1000, prof_diff_max=float(np.abs(p0 - p1).max() * 1000),             # [um]
     bands=[dict(z=[lo, lo + 20], corr=cor(L0[:, (z >= lo) & (z <= lo + 20)], L1[:, (z >= lo) & (z <= lo + 20)])) for lo in (0, 20, 40, 60, 80)])
-json.dump(out, open('../out/compare_prev.json', 'w'), indent=1)
+json.dump(out, open(OUT, 'w'), indent=1)
 print(json.dumps(out, indent=1))

@@ -811,8 +811,14 @@ python test_jacobian.py datab ../out/fitB_datab.npz
 
 用更小的有限差分幅度做过一次研究，15\um{} 而不是 60\um（\code{kernel\_modes.py ... 0.015}，在流程里是
 \code{LG\_KAMP=0.015}；日志为 \path{results/checks/test_jacobian_amp015.log}）：非轴对称场 0.86--1.00，
-平缓鼓包 0.66--0.80（斜率 0.62--0.66），台阶 0.26--0.48。有改善，但仍不好。发布的结果\emph{没有}用它
-重跑，默认值仍是 60\um。
+平缓鼓包 0.66--0.80（斜率 0.62--0.66），台阶 0.26--0.48。有改善，但仍不好。
+
+随后用 15\um{} 把整条链和全部检验重跑了一遍（\code{LG\_KAMP=0.015 ./run\_all.sh --with-checks}；
+数字、壁面和日志在 \path{results/checks/kamp015_*}）。拟合没有变好：残差 0.91\,\%、$\chi^2/N=1.30$，
+而发布的结果是 0.90\,\% 和 1.27。它得到的壁面与发布的壁面接近（局部起伏相关系数 0.89，平均轮廓相差
+均方根 3\um），这是从同一条轴对称轮廓出发的两次运行应有的结果；它说明流程可以重复，并不说明壁面被确定了。
+从发布的壁面出发、用在它附近算出的 15\um{} 核再迭代，八个试探步没有一个能降低目标函数。所以限制拟合的
+并不是核的有限差分幅度。发布的结果不变，默认值仍是 60\um。
 
 由此得到的几点。
 \begin{itemize}
@@ -905,7 +911,7 @@ python compare_walls.py ../out/final_data.npz ../results/earlier/wall_coeffs_cb8
 闭合测试是在假扫描图上显示不唯一性，这项检验则是在实测扫描图上。
 \path{results/earlier/wall_coeffs_cb81f08.json} 是工具包较早版本（提交 \code{cb81f08}）发布的壁面，
 那时追迹器的步进和光线序列还没有修正。脚本用现在的追迹器、孔径和光斑追迹那块壁面（默认每点 20\,000 条
-光线，可由第三个参数指定），按 \code{final.py} 的方式拟合幅度，再与当前结果的壁面比较。结果写入
+光线，可由第三个参数指定；第四个参数是输出文件名），按 \code{final.py} 的方式拟合幅度，再与当前结果的壁面比较。结果写入
 \path{../out/compare_prev.json}，由 \code{collect\_numbers.py} 收进 \code{numbers.json} 的 \code{prev}
 块；\code{run\_all.sh} 在流水线之后立即运行它。两块壁面必须在同一张样条网格上。
 
@@ -988,8 +994,8 @@ python compare_walls.py ../out/final_data.npz ../results/earlier/wall_coeffs_cb8
 \code{amin\_um}、\code{amin\_surf\_um}、\code{corr\_all}、\code{base\_sha1} \\
 \code{A\_refl.npz} & 放开镜面反射率的 Stage A，从 \code{A\_data.npz} 出发（\code{run\_all.sh --with-checks}） \\
 \code{jacobian.json}、\code{test\_jacobian.log} & \code{test\_jacobian.py}：核与响应图精确变化的对比
-（第~\ref{sec:jactest}~节）；JSON 文件带有 \code{wall\_sha1}。本手册引用的两次运行的日志保存在
-\path{results/checks/} 中 \\
+（第~\ref{sec:jactest}~节）；JSON 文件带有 \code{wall\_sha1}。本手册引用的各次运行的日志，以及用
+15\um{} 幅度完整重跑的结果，保存在 \path{results/checks/} 中 \\
 \code{compare\_prev.json} & \code{compare\_walls.py}：当前壁面与此前一次拟合的壁面的对比
 （第~\ref{sec:prev}~节），带 \code{wall\_sha1} 和 \code{earlier\_sha1} \\
 \bottomrule

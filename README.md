@@ -113,7 +113,9 @@ The wall is not unique (see above), and the fit is not a proven optimum (χ²/N 
 scan stopped at 1.48 and 1.31). The azimuthal-mean profile is degenerate with the signal scale, the exit radius
 and the mirror reflectivity. The linear kernels that steer the fit are weak for broad smooth shapes, the mean
 profile above all, so steps in those directions are found inefficiently and the resolution figures of the
-closure test are only indicative there (every step is still verified by a full ray trace). Everything is attributed to geometry (perfect mirror, uniform PMT, Lambertian
+closure test are only indicative there (every step is still verified by a full ray trace). A full rerun with
+more accurate kernels (15 µm instead of 60 µm finite-difference amplitude) did not fit better (χ²/N = 1.30), see
+`results/checks/`. Everything is attributed to geometry (perfect mirror, uniform PMT, Lambertian
 source). The ring between r = 8.0 mm and the entrance rim is not fitted; there the measurement lies about 2 %
 below the model. The spline grid is 2.5 mm along the axis and 15° in azimuth. To pin down the real wall, add
 independent measurements: collimated-beam scans at several angles, angle-resolved readout, a scan from the

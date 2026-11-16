@@ -937,7 +937,17 @@ A study with a smaller finite-difference amplitude, 15\um{} instead of 60\um{}
 (\code{kernel\_modes.py ... 0.015}, in the chain \code{LG\_KAMP=0.015}; log in
 \path{results/checks/test_jacobian_amp015.log}), gives 0.86--1.00 for the non-axisymmetric fields,
 0.66--0.80 for the gentle bump (slope 0.62--0.66) and 0.26--0.48 for the step. That is better but
-not good. The published result was \emph{not} rerun with it; the default stays 60\um.
+not good.
+
+The whole chain and all checks were then rerun with 15\um{} (\code{LG\_KAMP=0.015 ./run\_all.sh
+--with-checks}; numbers, wall and logs in \path{results/checks/kamp015_*}). The fit did not improve:
+residual 0.91\,\% and $\chi^2/N=1.30$, against 0.90\,\% and 1.27 for the published result. The wall
+it finds is close to the published one (local unevenness correlated at 0.89, mean profiles 3\um{} RMS
+apart), as expected of two runs that start from the same axisymmetric profile; this shows that the
+chain is reproducible, not that the wall is determined. Starting from the published wall with 15\um{}
+kernels computed around it, none of the eight trial steps lowered the objective. The finite-difference
+amplitude is therefore not what limits the fit. The published result is unchanged and the default
+stays 60\um.
 
 What follows from this.
 \begin{itemize}
@@ -1050,7 +1060,7 @@ The closure test shows the non-uniqueness on a synthetic scan. This check shows 
 one. \path{results/earlier/wall_coeffs_cb81f08.json} holds the wall that was published with an
 earlier version of the toolkit (commit \code{cb81f08}), before the march and the ray sequence of the
 tracer were corrected. The script traces that wall with the present tracer, aperture and light spot
-(20\,000 rays per point by default; third argument), fits its amplitude as \code{final.py} does, and
+(20\,000 rays per point by default; third argument; a fourth names the output file), fits its amplitude as \code{final.py} does, and
 compares it with the wall of the present result. It writes \path{../out/compare_prev.json}, which
 \code{collect\_numbers.py} copies into the block \code{prev} of \code{numbers.json}; \code{run\_all.sh}
 runs it right after the pipeline. Both walls must be on the same spline grid.
@@ -1146,7 +1156,8 @@ the ideal cone (\code{ratio}, \code{ratio\_err}, \code{pull\_rms}, \code{corr}, 
 (\code{run\_all.sh --with-checks}) \\
 \code{jacobian.json}, \code{test\_jacobian.log} & \code{test\_jacobian.py}: kernels against exact
 changes of the map (Section~\ref{sec:jactest}); the JSON file carries \code{wall\_sha1}. The logs of
-the two runs quoted in this manual are tracked in \path{results/checks/} \\
+the runs quoted in this manual, and the full rerun with the 15\um{} amplitude, are tracked in
+\path{results/checks/} \\
 \code{compare\_prev.json} & \code{compare\_walls.py}: this wall against the wall of an earlier fit
 (Section~\ref{sec:prev}), with \code{wall\_sha1} and \code{earlier\_sha1} \\
 \bottomrule
